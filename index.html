@@ -1,3 +1,14 @@
+<!-- M12.11.7A9 — Card Detail → Commit Transition Fix.
+     Fixes a same-dialog close/reopen race for untargeted cards played from Card Detail.
+     Untargeted Creature / Artifact / Sorcery now morph the already-open Card Detail dialog directly
+     into the Resonance Commit UI without calling detail.close() first. Targeted cards retain the existing
+     close → TARGETING path. No gameplay, card data, Resonance validation, Drag, Combat or P0-P5 changes. -->
+<!-- M12.11.7A8 — Mobile Drop Acceptance Hardening.
+     Mobile drag gesture ownership from 7A7 is retained unchanged.
+     Drop acceptance is hardened with a stable player-row-derived mobile hitbox, drag-start snapshot,
+     finger-or-card-overlap hit testing, preserved HOT intent, and UID/game-state legality revalidation
+     independent from the transient Hand DOM node.
+     No gameplay, Resonance, Card Data, Combat, Targeting, Desktop drag, Commit or P0-P5 changes. -->
 <!-- M12.11.7A7 — Mobile Gesture Ownership Rewrite.
      Focused playable Creature now owns the complete iOS touch sequence from touchstart.
      One touch state machine decides TAP / MANUAL HORIZONTAL HAND SCROLL / UPWARD DRAG.
@@ -7053,6 +7064,27 @@ body.wb-webapp-mode .fullscreen-button{
 }
 </style>
 
+
+<style id="m12-11-7a8-mobile-drop-acceptance">
+@media (orientation:landscape) and (max-width:1180px) and (max-height:700px){
+  .creature-drop-surface-cue{
+    border-width:2px!important;
+    border-style:solid!important;
+    border-color:rgba(232,200,125,.48)!important;
+    background:
+      linear-gradient(180deg,rgba(232,200,125,.045),rgba(232,200,125,.10))!important;
+  }
+  .creature-drop-surface-cue.is-hot{
+    border-color:#f2dda0!important;
+    background:
+      linear-gradient(180deg,rgba(232,200,125,.11),rgba(232,200,125,.19))!important;
+  }
+  .creature-drop-surface-cue span::after{
+    content:' · วางได้ทั้งพื้นที่กรอบ';
+  }
+}
+</style>
+
 </head>
 <style id="m12-11-p5-creature-summon-feedback">
 /* M12.11 P5 — Creature entry feedback. Overlay/filter/clip only; no geometry movement or reflow. */
@@ -9048,13 +9080,18 @@ function beginHandPlay(uid){
  const x=game.players[0].hand.find(a=>a.uid===Number(uid));
  if(game.active!==0||!x||game.reason(x))return false;
  const c=C[x.key];
+
+ /* 7A9: Card Detail and Resonance Commit intentionally share the same <dialog>.
+    For an untargeted card, closing Card Detail before startPayment() could queue a
+    close event that later cleared the newly-created pendingPayment. Morph the
+    already-open dialog directly into Commit instead. */
+ if(!c.target)return startPayment(Number(uid));
+
+ /* Targeted cards still leave Card Detail first and enter canonical STEP 4 targeting. */
  if(detail.open)detail.close();
- if(c.target){
-  selected={kind:'play',uid:Number(uid)};
-  render();
-  return true;
- }
- return startPayment(Number(uid));
+ selected={kind:'play',uid:Number(uid)};
+ render();
+ return true;
 }
 
 const UI_TH={
@@ -9521,18 +9558,41 @@ function creatureDropZone(){
 function creatureDropRect(){
  const zone=creatureDropZone(),zr=zone?.getBoundingClientRect();
  if(!mobileTacticalFanActive())return zr||null;
+
  const field=document.querySelector('#app.duel-viewport .battlefield');
  const landmark=field?.querySelector('.landmark-row');
  const bottom=field?.querySelector('.field-bottom');
  const fr=field?.getBoundingClientRect(),lr=landmark?.getBoundingClientRect(),br=bottom?.getBoundingClientRect();
- if(!fr)return zr||null;
- const top=Math.max(fr.top+fr.height*.46,(lr?.bottom||fr.top+fr.height*.5)-2);
- const bottomY=Math.min(fr.bottom-4,(br?.top||fr.bottom-4)+2);
- return {left:fr.left+4,right:fr.right-4,top,bottom:Math.max(top+34,bottomY),width:Math.max(0,fr.width-8),height:Math.max(34,bottomY-top)};
+
+ /* 7A8: the canonical summon row is the source of truth.
+    Expand around that real row, then clamp to the Battlefield.
+    Do not derive the whole target from .field-bottom.top — that could collapse the
+    accepted area on some compact iPhone layouts. */
+ if(zr){
+  const fieldLeft=fr?.left??zr.left,fieldRight=fr?.right??zr.right;
+  const fieldTop=fr?.top??zr.top,fieldBottom=fr?.bottom??zr.bottom;
+  const left=Math.max(fieldLeft+2,zr.left-18);
+  const right=Math.min(fieldRight-2,zr.right+18);
+  const landmarkFloor=lr?.bottom!=null?lr.bottom-8:fieldTop;
+  const keeperCeiling=br?.top!=null?br.top+12:fieldBottom;
+  const top=Math.max(fieldTop+2,Math.min(zr.top-26,landmarkFloor));
+  const bottomY=Math.min(fieldBottom-2,Math.max(zr.bottom+30,keeperCeiling));
+  const bottom=Math.max(top+Math.max(72,zr.height),bottomY);
+  return {
+   left,right,top,bottom,
+   width:Math.max(0,right-left),
+   height:Math.max(0,bottom-top)
+  };
+ }
+
+ if(!fr)return null;
+ const top=fr.top+fr.height*.50;
+ const bottomY=fr.bottom-4;
+ return {left:fr.left+4,right:fr.right-4,top,bottom:bottomY,width:Math.max(0,fr.width-8),height:Math.max(0,bottomY-top)};
 }
-function creatureDropCueCreate(){
+function creatureDropCueCreate(r=null){
  document.querySelector('.creature-drop-surface-cue')?.remove();
- const r=creatureDropRect();if(!r)return null;
+ r=r||creatureDragState?.dropRect||creatureDropRect();if(!r)return null;
  const cue=document.createElement('div');cue.className='creature-drop-surface-cue';
  cue.style.left=`${r.left}px`;cue.style.top=`${r.top}px`;cue.style.width=`${r.right-r.left}px`;cue.style.height=`${r.bottom-r.top}px`;
  cue.innerHTML='<span>PLAYER ARENA · ปล่อย Creature ที่นี่</span>';
@@ -9540,6 +9600,41 @@ function creatureDropCueCreate(){
 }
 function pointInsideRect(x,y,r,pad=0){
  return !!r&&x>=r.left-pad&&x<=r.right+pad&&y>=r.top-pad&&y<=r.bottom+pad;
+}
+function rectOverlapRatio(a,b){
+ if(!a||!b)return 0;
+ const left=Math.max(a.left,b.left),right=Math.min(a.right,b.right);
+ const top=Math.max(a.top,b.top),bottom=Math.min(a.bottom,b.bottom);
+ if(right<=left||bottom<=top)return 0;
+ const overlap=(right-left)*(bottom-top);
+ const area=Math.max(1,(a.width||a.right-a.left)*(a.height||a.bottom-a.top));
+ return overlap/area;
+}
+function creatureDragPlayStillLegal(uid){
+ if(!started||game.active!==0||game.winner!==null||selected||resolutionState||fxLock||aiQueueRunning||aiPacingState||game.pendingChoice)return false;
+ const x=game.players[0].hand.find(a=>a.uid===Number(uid));
+ return !!(x&&C[x.key]?.type==='Creature'&&!game.reason(x));
+}
+function creatureDragDropAccepted(st,x,y){
+ if(!st||!creatureDragPlayStillLegal(st.uid))return false;
+ const r=st.dropRect||creatureDropRect();
+ if(!r)return false;
+
+ /* Finger in zone is always sufficient. Keep a modest release pad for touch jitter. */
+ if(pointInsideRect(x,y,r,16))return true;
+
+ /* If the player visibly moved the held card into the Arena, accept the card body too.
+    This is important when the finger grabs near the lower edge of a focused card. */
+ const pr=st.proxy?.getBoundingClientRect?.();
+ if(pr){
+  const cx=pr.left+pr.width/2,cy=pr.top+pr.height/2;
+  if(pointInsideRect(cx,cy,r,8))return true;
+  if(rectOverlapRatio(pr,r)>=.16)return true;
+ }
+
+ /* Preserve a clearly-hot drag intent across tiny touchend coordinate jitter. */
+ if(st.hot===true)return true;
+ return false;
 }
 function creatureDragSetHot(hot){
  const zone=creatureDropZone();
@@ -9580,11 +9675,12 @@ function creatureDragCreateProxy(st,x,y){
  }
  document.body.appendChild(proxy);
  st.proxy=proxy;
+ st.dropRect=creatureDropRect();
  st.source.classList.add('creature-drag-source');
  st.source.setAttribute('aria-grabbed','true');
  const zone=creatureDropZone();
  if(zone)zone.classList.add('creature-drop-zone');
- if(mobileTacticalFanActive())creatureDropCueCreate();
+ if(mobileTacticalFanActive())creatureDropCueCreate(st.dropRect);
  document.querySelector('#app.duel-viewport')?.classList.add('creature-drag-active');
  creatureDragPositionProxy(x,y);
 }
@@ -9661,7 +9757,7 @@ document.addEventListener('pointermove',ev=>{
  }
  if(ev.cancelable)ev.preventDefault();
  creatureDragPositionProxy(ev.clientX,ev.clientY);
- const r=creatureDropRect();
+ const r=st.dropRect||creatureDropRect();
  creatureDragSetHot(pointInsideRect(ev.clientX,ev.clientY,r,4));
 },{passive:false});
 
@@ -9671,8 +9767,9 @@ document.addEventListener('pointerup',ev=>{
  if(!st.active){try{st.source?.releasePointerCapture?.(st.pointerId)}catch{} creatureDragState=null;return}
  if(ev.cancelable)ev.preventDefault();
  try{st.source?.releasePointerCapture?.(st.pointerId)}catch{}
- const r=creatureDropRect();
- const valid=pointInsideRect(ev.clientX,ev.clientY,r,mobileTacticalFanActive()?10:4)&&!!creatureDragEligibleCard(st.source);
+ const valid=mobileTacticalFanActive()
+  ?creatureDragDropAccepted(st,ev.clientX,ev.clientY)
+  :(pointInsideRect(ev.clientX,ev.clientY,st.dropRect||creatureDropRect(),4)&&creatureDragPlayStillLegal(st.uid));
  dragSuppressClickUntil=Date.now()+420;
  if(valid)creatureDragAccept(st);else creatureDragSnapBack(st);
 },{passive:false});
@@ -9768,8 +9865,11 @@ document.addEventListener('touchmove',ev=>{
  }
 
  creatureDragPositionProxy(t.clientX,t.clientY);
- const r=creatureDropRect();
- creatureDragSetHot(pointInsideRect(t.clientX,t.clientY,r,12));
+ const r=st.dropRect||creatureDropRect();
+ const fingerHot=pointInsideRect(t.clientX,t.clientY,r,16);
+ const pr=st.proxy?.getBoundingClientRect?.();
+ const cardHot=!!pr&&(pointInsideRect(pr.left+pr.width/2,pr.top+pr.height/2,r,8)||rectOverlapRatio(pr,r)>=.16);
+ creatureDragSetHot(fingerHot||cardHot);
 },{passive:false,capture:true});
 
 document.addEventListener('touchend',ev=>{
@@ -9797,8 +9897,8 @@ document.addEventListener('touchend',ev=>{
   return;
  }
 
- const x=t.clientX,y=t.clientY,r=creatureDropRect();
- const valid=pointInsideRect(x,y,r,12)&&!!creatureDragEligibleCard(st.source);
+ const x=t.clientX,y=t.clientY;
+ const valid=creatureDragDropAccepted(st,x,y);
  dragSuppressClickUntil=Date.now()+650;
  mobileOwnedTouchReset();
  if(valid)creatureDragAccept(st);else creatureDragSnapBack(st);
