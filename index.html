@@ -1,3 +1,8 @@
+<!-- M12.11.7A7 — Mobile Gesture Ownership Rewrite.
+     Focused playable Creature now owns the complete iOS touch sequence from touchstart.
+     One touch state machine decides TAP / MANUAL HORIZONTAL HAND SCROLL / UPWARD DRAG.
+     Mobile drag proxy preserves the finger grab point and removes X/Y easing lag.
+     Desktop mouse drag, Commit logic, Gameplay, Card Data, Targeting, Combat and P0-P5 remain unchanged. -->
 <!-- M12.11.7A6 — Mobile Commit Single-Tap Hardening.
      iOS/coarse-touch Resonance Commit controls now resolve on a direct touchend path rather than
      depending only on WebKit's synthesized click. The same centralized payment handler is shared
@@ -6555,7 +6560,7 @@
 <style id="m12-11-7a1-mobile-drag-activation-bridge">
 @media (orientation:landscape) and (max-width:1180px) and (max-height:700px){
   #app.mobile-hand-fan-active .hand-scroll.mobile-tactical-fan-hand>.card.mobile-hand-focus[data-card-type="creature"].playable{
-    touch-action:pan-x;
+    touch-action:none;
   }
   #app.mobile-hand-fan-active .player-row.creature-drop-zone::before{
     min-width:102px;
@@ -6754,7 +6759,7 @@ body.wb-webapp-mode .fullscreen-button{
 
   /* Real touch: focused Creature owns vertical drag; horizontal browsing can start from neighboring cards/rail. */
   #app.mobile-hand-fan-active .hand-scroll.mobile-tactical-fan-hand>.card.mobile-hand-focus[data-card-type="creature"].playable{
-    touch-action:pan-x!important;
+    touch-action:none!important;
     -webkit-user-select:none!important;
     user-select:none!important;
     -webkit-touch-callout:none!important;
@@ -7002,6 +7007,49 @@ body.wb-webapp-mode .fullscreen-button{
     min-width:30px!important;
     min-height:30px!important;
   }
+}
+</style>
+
+
+<style id="m12-11-7a7-mobile-gesture-ownership">
+@media (orientation:landscape) and (max-width:1180px) and (max-height:700px){
+  /* The focused playable Creature is an app-owned gesture surface. */
+  #app.mobile-hand-fan-active .hand-scroll.mobile-tactical-fan-hand>
+  .card.mobile-hand-focus[data-card-type="creature"].playable{
+    touch-action:none!important;
+    -webkit-user-select:none!important;
+    user-select:none!important;
+    -webkit-touch-callout:none!important;
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-touch-owned{
+    -webkit-tap-highlight-color:transparent!important;
+  }
+
+  /* Mobile held card follows finger immediately; no 170ms X/Y lag. */
+  .creature-drag-proxy.mobile-touch-drag{
+    transform:scale(var(--drag-scale,.96)) rotate(-1deg)!important;
+    transform-origin:
+      var(--drag-grab-x,50%)
+      var(--drag-grab-y,50%)!important;
+    transition:
+      transform .07s ease,
+      opacity .07s ease,
+      filter .07s ease,
+      box-shadow .07s ease!important;
+    will-change:left,top,transform;
+  }
+
+  /* During game-owned horizontal browse, suppress fan transitions so the rail tracks the finger directly. */
+  #app.mobile-hand-fan-active.mobile-hand-scroll-owned .hand-scroll,
+  #app.mobile-hand-fan-active.mobile-hand-scroll-owned .hand-scroll>.card{
+    scroll-behavior:auto!important;
+    transition:none!important;
+  }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .creature-drag-proxy.mobile-touch-drag{transition:none!important}
 }
 </style>
 
@@ -9397,7 +9445,7 @@ function dragHandoffStage(st){
  const zone=creatureDropZone(),zr=zone?.getBoundingClientRect(),sr=st.source?.getBoundingClientRect();
  const proxy=st.proxy;
  const cx=zr?zr.left+zr.width/2:st.lastX,cy=zr?zr.top+Math.min(zr.height*.58,zr.height-18):st.lastY;
- proxy.classList.remove('desktop-mouse-drag');
+ proxy.classList.remove('desktop-mouse-drag','mobile-touch-drag');
  proxy.classList.remove('creature-drag-snapback','creature-drag-accepted');
  proxy.classList.add('creature-drag-staging');
  proxy.style.left=`${cx}px`;proxy.style.top=`${cy}px`;
@@ -9501,7 +9549,7 @@ function creatureDragSetHot(hot){
 }
 function creatureDragPositionProxy(x,y){
  const st=creatureDragState;if(!st?.proxy)return;
- if(st.proxy.classList.contains('desktop-mouse-drag')){
+ if(st.proxy.classList.contains('desktop-mouse-drag')||st.proxy.classList.contains('mobile-touch-drag')){
   st.proxy.style.left=`${x-(st.grabX||0)}px`;
   st.proxy.style.top=`${y-(st.grabY||0)}px`;
  }else{
@@ -9520,7 +9568,10 @@ function creatureDragCreateProxy(st,x,y){
  proxy.style.width=`${rect.width}px`;
  proxy.style.height=`${rect.height}px`;
  if(mobileTacticalFanActive()){
+  proxy.classList.add('mobile-touch-drag');
   proxy.style.setProperty('--drag-scale','.96');
+  proxy.style.setProperty('--drag-grab-x',`${Math.max(0,Math.min(rect.width,st.grabX||rect.width/2))}px`);
+  proxy.style.setProperty('--drag-grab-y',`${Math.max(0,Math.min(rect.height,st.grabY||rect.height/2))}px`);
  }else{
   proxy.classList.add('desktop-mouse-drag');
   proxy.style.setProperty('--drag-scale','.94');
@@ -9557,7 +9608,7 @@ function creatureDragCleanup({keepProxy=false}={}){
 function creatureDragSnapBack(st){
  if(!st?.proxy){creatureDragCleanup();return}
  const r=st.source.getBoundingClientRect();
- st.proxy.classList.remove('desktop-mouse-drag');
+ st.proxy.classList.remove('desktop-mouse-drag','mobile-touch-drag');
  st.proxy.classList.add('creature-drag-snapback');
  st.proxy.style.left=`${r.left+r.width/2}px`;
  st.proxy.style.top=`${r.top+r.height/2}px`;
@@ -9634,51 +9685,80 @@ document.addEventListener('pointercancel',ev=>{
 },{passive:true});
 
 
-/* M12.11.7A4 — iOS/mobile touch owns Creature Drag-to-Play.
-   Direction is undecided until intent is clear; diagonal upward movement is accepted.
-   Horizontal browsing remains available until the gesture locks vertical. */
+/* M12.11.7A7 — Mobile Gesture Ownership Rewrite.
+   A focused playable Creature owns the touch from touchstart.
+   The game, not Safari, chooses TAP / horizontal HAND SCROLL / upward DRAG. */
 function mobileTouchById(list,id){
  for(const t of list||[])if(t.identifier===id)return t;
  return null;
 }
+function mobileOwnedTouchReset(){
+ const st=creatureDragState;
+ if(st?.source)st.source.classList.remove('mobile-touch-owned');
+ document.querySelector('#app.duel-viewport')?.classList.remove('mobile-hand-scroll-owned');
+}
+function mobileOwnedTapOpenDetail(st){
+ if(!st?.source?.isConnected)return;
+ const uid=Number(st.uid);
+ mobileHandFocusUid=null;
+ dragSuppressClickUntil=Date.now()+650;
+ showCard(uid,'hand',0);
+}
 document.addEventListener('touchstart',ev=>{
  if(!mobileTacticalFanActive()||ev.touches.length!==1)return;
- const el=ev.target.closest?.('#app .hand-scroll>.card.mobile-hand-focus');
+ const el=ev.target.closest?.('#app .hand-scroll>.card.mobile-hand-focus[data-card-type="creature"].playable');
  const eligible=creatureDragEligibleCard(el);
  if(!eligible)return;
- const t=ev.touches[0];
+
+ /* Critical ownership point: do this before WebKit can promote the sequence to browser/scroll handling. */
+ if(ev.cancelable)ev.preventDefault();
+
+ const t=ev.touches[0],rect=el.getBoundingClientRect(),rail=el.closest('.hand-scroll');
  creatureDragState={
   uid:eligible.uid,source:el,pointerId:'touch',touchId:t.identifier,
   startX:t.clientX,startY:t.clientY,lastX:t.clientX,lastY:t.clientY,
-  active:false,cancelled:false,hot:false,proxy:null,gestureMode:'undecided'
+  grabX:t.clientX-rect.left,grabY:t.clientY-rect.top,
+  active:false,cancelled:false,hot:false,proxy:null,
+  gestureMode:'undecided',
+  rail,
+  railStartScrollLeft:rail?.scrollLeft||0
  };
-},{passive:true});
+ el.classList.add('mobile-touch-owned');
+},{passive:false,capture:true});
 
 document.addEventListener('touchmove',ev=>{
  const st=creatureDragState;if(!st||st.pointerId!=='touch'||st.cancelled)return;
  const t=mobileTouchById(ev.touches,st.touchId);if(!t)return;
+
+ /* Once this focused card owns the sequence, Safari never gets a later chance to steal it. */
+ if(ev.cancelable)ev.preventDefault();
+
  st.lastX=t.clientX;st.lastY=t.clientY;
- const dx=t.clientX-st.startX,dy=t.clientY-st.startY,adx=Math.abs(dx),ady=Math.abs(dy),dist=Math.hypot(dx,dy);
+ const dx=t.clientX-st.startX,dy=t.clientY-st.startY;
+ const adx=Math.abs(dx),ady=Math.abs(dy),dist=Math.hypot(dx,dy);
+
+ if(st.gestureMode==='scroll'){
+  if(st.rail)st.rail.scrollLeft=st.railStartScrollLeft-dx;
+  return;
+ }
 
  if(!st.active){
-  if(st.gestureMode==='scroll')return;
-  if(dist<9)return;
+  if(dist<7)return;
 
-  /* Do not reject on a small diagonal wobble. Horizontal wins only when clearly dominant. */
-  if(adx>=16&&adx>ady*1.55){
+  /* Clear horizontal intent: manual Hand scroll. State stays alive for the whole touch. */
+  if(adx>=10&&adx>ady*1.22){
    st.gestureMode='scroll';
-   creatureDragState=null;
+   document.querySelector('#app.duel-viewport')?.classList.add('mobile-hand-scroll-owned');
+   if(st.rail)st.rail.scrollLeft=st.railStartScrollLeft-dx;
    return;
   }
 
-  /* Upward intent can be diagonal; require meaningful upward travel, not a near-perfect angle. */
-  if(-dy>=12&&(-dy)>=adx*.52){
+  /* Upward play intent tolerates natural diagonal finger movement. */
+  if(-dy>=9&&(-dy)>=adx*.42){
    st.gestureMode='drag';
    st.active=true;
    creatureDragCreateProxy(st,t.clientX,t.clientY);
-  }else if(dist<26){
-   return;
-  }else if(dy<0){
+  }else if(dist>=18&&dy<=-3){
    st.gestureMode='drag';
    st.active=true;
    creatureDragCreateProxy(st,t.clientX,t.clientY);
@@ -9687,28 +9767,48 @@ document.addEventListener('touchmove',ev=>{
   }
  }
 
- if(!st.active)return;
- if(ev.cancelable)ev.preventDefault();
  creatureDragPositionProxy(t.clientX,t.clientY);
  const r=creatureDropRect();
- creatureDragSetHot(pointInsideRect(t.clientX,t.clientY,r,10));
-},{passive:false});
+ creatureDragSetHot(pointInsideRect(t.clientX,t.clientY,r,12));
+},{passive:false,capture:true});
 
 document.addEventListener('touchend',ev=>{
  const st=creatureDragState;if(!st||st.pointerId!=='touch')return;
  const t=mobileTouchById(ev.changedTouches,st.touchId);
- if(!st.active){creatureDragState=null;return}
+ if(!t)return;
+
  if(ev.cancelable)ev.preventDefault();
- const x=t?.clientX??st.lastX,y=t?.clientY??st.lastY,r=creatureDropRect();
- const valid=pointInsideRect(x,y,r,10)&&!!creatureDragEligibleCard(st.source);
- dragSuppressClickUntil=Date.now()+500;
+
+ const dx=t.clientX-st.startX,dy=t.clientY-st.startY,dist=Math.hypot(dx,dy);
+
+ if(st.gestureMode==='scroll'){
+  dragSuppressClickUntil=Date.now()+500;
+  mobileOwnedTouchReset();
+  creatureDragState=null;
+  return;
+ }
+
+ if(!st.active){
+  /* Since touchstart suppressed WebKit's synthetic click, perform the focused-card second-tap ourselves. */
+  const shouldOpenDetail=dist<=9;
+  mobileOwnedTouchReset();
+  creatureDragState=null;
+  if(shouldOpenDetail)mobileOwnedTapOpenDetail(st);
+  return;
+ }
+
+ const x=t.clientX,y=t.clientY,r=creatureDropRect();
+ const valid=pointInsideRect(x,y,r,12)&&!!creatureDragEligibleCard(st.source);
+ dragSuppressClickUntil=Date.now()+650;
+ mobileOwnedTouchReset();
  if(valid)creatureDragAccept(st);else creatureDragSnapBack(st);
-},{passive:false});
+},{passive:false,capture:true});
 
 document.addEventListener('touchcancel',ev=>{
  const st=creatureDragState;if(!st||st.pointerId!=='touch')return;
+ mobileOwnedTouchReset();
  if(st.active)creatureDragSnapBack(st);else creatureDragState=null;
-},{passive:true});
+},{passive:true,capture:true});
 
 function mulliganCardRules(c){
  let rows='';
