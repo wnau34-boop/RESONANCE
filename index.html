@@ -1,3 +1,9 @@
+<!-- M12.11.7A10 — Mobile Drag Simplification.
+     Focused playable Creature now has one touch meaning: DRAG.
+     Horizontal-scroll arbitration is removed from the focused card itself.
+     Mobile drop acceptance is based on a stable player-side Battlefield band bounded by Landmark/player side
+     and the top edge of the Hand, with upward-travel gating and card-body/finger hit testing.
+     No gameplay, Card Data, Resonance, Desktop drag, Commit, Targeting, Combat or P0-P5 changes. -->
 <!-- M12.11.7A9 — Card Detail → Commit Transition Fix.
      Fixes a same-dialog close/reopen race for untargeted cards played from Card Detail.
      Untargeted Creature / Artifact / Sorcery now morph the already-open Card Detail dialog directly
@@ -7085,6 +7091,46 @@ body.wb-webapp-mode .fullscreen-button{
 }
 </style>
 
+
+<style id="m12-11-7a10-mobile-drag-simplification">
+@media (orientation:landscape) and (max-width:1180px) and (max-height:700px){
+  #app.mobile-hand-fan-active .hand-scroll.mobile-tactical-fan-hand>
+  .card.mobile-hand-focus[data-card-type="creature"].playable{
+    touch-action:none!important;
+    -webkit-user-select:none!important;
+    user-select:none!important;
+    -webkit-touch-callout:none!important;
+  }
+
+  .creature-drag-proxy.mobile-touch-drag{
+    --drag-scale:.90!important;
+    transform:scale(var(--drag-scale,.90)) rotate(-.6deg)!important;
+    transition:
+      transform .05s ease,
+      opacity .05s ease,
+      filter .05s ease,
+      box-shadow .05s ease!important;
+    will-change:left,top,transform;
+  }
+
+  .creature-drop-surface-cue{
+    border:2px solid rgba(232,200,125,.52)!important;
+    background:linear-gradient(180deg,rgba(232,200,125,.04),rgba(232,200,125,.11))!important;
+  }
+  .creature-drop-surface-cue.is-hot{
+    border-color:#f6df9b!important;
+    background:linear-gradient(180deg,rgba(232,200,125,.12),rgba(232,200,125,.22))!important;
+    box-shadow:inset 0 0 36px rgba(232,200,125,.14),0 0 22px rgba(232,200,125,.16)!important;
+  }
+  .creature-drop-surface-cue span{
+    font-size:8.5px!important;
+  }
+}
+@media (prefers-reduced-motion:reduce){
+  .creature-drag-proxy.mobile-touch-drag{transition:none!important}
+}
+</style>
+
 </head>
 <style id="m12-11-p5-creature-summon-feedback">
 /* M12.11 P5 — Creature entry feedback. Overlay/filter/clip only; no geometry movement or reflow. */
@@ -9559,43 +9605,32 @@ function creatureDropRect(){
  const zone=creatureDropZone(),zr=zone?.getBoundingClientRect();
  if(!mobileTacticalFanActive())return zr||null;
 
- const field=document.querySelector('#app.duel-viewport .battlefield');
+ const app=document.querySelector('#app.duel-viewport');
+ const field=app?.querySelector('.battlefield');
+ const hand=app?.querySelector('.hand-area');
  const landmark=field?.querySelector('.landmark-row');
- const bottom=field?.querySelector('.field-bottom');
- const fr=field?.getBoundingClientRect(),lr=landmark?.getBoundingClientRect(),br=bottom?.getBoundingClientRect();
+ const fr=field?.getBoundingClientRect(),hr=hand?.getBoundingClientRect(),lr=landmark?.getBoundingClientRect();
 
- /* 7A8: the canonical summon row is the source of truth.
-    Expand around that real row, then clamp to the Battlefield.
-    Do not derive the whole target from .field-bottom.top — that could collapse the
-    accepted area on some compact iPhone layouts. */
- if(zr){
-  const fieldLeft=fr?.left??zr.left,fieldRight=fr?.right??zr.right;
-  const fieldTop=fr?.top??zr.top,fieldBottom=fr?.bottom??zr.bottom;
-  const left=Math.max(fieldLeft+2,zr.left-18);
-  const right=Math.min(fieldRight-2,zr.right+18);
-  const landmarkFloor=lr?.bottom!=null?lr.bottom-8:fieldTop;
-  const keeperCeiling=br?.top!=null?br.top+12:fieldBottom;
-  const top=Math.max(fieldTop+2,Math.min(zr.top-26,landmarkFloor));
-  const bottomY=Math.min(fieldBottom-2,Math.max(zr.bottom+30,keeperCeiling));
-  const bottom=Math.max(top+Math.max(72,zr.height),bottomY);
-  return {
-   left,right,top,bottom,
-   width:Math.max(0,right-left),
-   height:Math.max(0,bottom-top)
-  };
+ /* 7A10: Mobile play zone is the stable player-side band between Landmark and Hand.
+    This matches what the player visually understands as "my side of the Battlefield". */
+ if(fr&&hr){
+  const left=fr.left+4,right=fr.right-4;
+  const lowerFieldTop=lr?.bottom!=null?lr.bottom-6:fr.top+fr.height*.48;
+  const top=Math.max(fr.top+fr.height*.42,lowerFieldTop);
+  const bottom=Math.min(fr.bottom-4,hr.top+12);
+  if(bottom>top+48){
+   return {left,right,top,bottom,width:right-left,height:bottom-top};
+  }
  }
 
- if(!fr)return null;
- const top=fr.top+fr.height*.50;
- const bottomY=fr.bottom-4;
- return {left:fr.left+4,right:fr.right-4,top,bottom:bottomY,width:Math.max(0,fr.width-8),height:Math.max(0,bottomY-top)};
+ return zr||fr||null;
 }
 function creatureDropCueCreate(r=null){
  document.querySelector('.creature-drop-surface-cue')?.remove();
  r=r||creatureDragState?.dropRect||creatureDropRect();if(!r)return null;
  const cue=document.createElement('div');cue.className='creature-drop-surface-cue';
  cue.style.left=`${r.left}px`;cue.style.top=`${r.top}px`;cue.style.width=`${r.right-r.left}px`;cue.style.height=`${r.bottom-r.top}px`;
- cue.innerHTML='<span>PLAYER ARENA · ปล่อย Creature ที่นี่</span>';
+ cue.innerHTML='<span>PLAY ZONE · ลากขึ้นแล้วปล่อยในพื้นที่นี้</span>';
  document.body.appendChild(cue);return cue;
 }
 function pointInsideRect(x,y,r,pad=0){
@@ -9620,20 +9655,24 @@ function creatureDragDropAccepted(st,x,y){
  const r=st.dropRect||creatureDropRect();
  if(!r)return false;
 
- /* Finger in zone is always sufficient. Keep a modest release pad for touch jitter. */
- if(pointInsideRect(x,y,r,16))return true;
+ const upward=(st.startY??y)-y;
+ if(upward<24)return false;
 
- /* If the player visibly moved the held card into the Arena, accept the card body too.
-    This is important when the finger grabs near the lower edge of a focused card. */
+ /* Finger enters the player's Battlefield band. */
+ if(pointInsideRect(x,y,r,18))return true;
+
+ /* Or the held card visibly enters the same band. */
  const pr=st.proxy?.getBoundingClientRect?.();
  if(pr){
   const cx=pr.left+pr.width/2,cy=pr.top+pr.height/2;
-  if(pointInsideRect(cx,cy,r,8))return true;
-  if(rectOverlapRatio(pr,r)>=.16)return true;
+  if(pointInsideRect(cx,cy,r,12))return true;
+  if(rectOverlapRatio(pr,r)>=.12)return true;
  }
 
- /* Preserve a clearly-hot drag intent across tiny touchend coordinate jitter. */
- if(st.hot===true)return true;
+ /* Strong upward intent + horizontally inside Battlefield: accept even with touchend jitter. */
+ if(upward>=54 && x>=r.left-20 && x<=r.right+20 && y<=r.bottom+28)return true;
+
+ if(st.hot===true&&upward>=24)return true;
  return false;
 }
 function creatureDragSetHot(hot){
@@ -9782,9 +9821,8 @@ document.addEventListener('pointercancel',ev=>{
 },{passive:true});
 
 
-/* M12.11.7A7 — Mobile Gesture Ownership Rewrite.
-   A focused playable Creature owns the touch from touchstart.
-   The game, not Safari, chooses TAP / horizontal HAND SCROLL / upward DRAG. */
+/* M12.11.7A10 — Focused Creature owns a pure drag gesture on Mobile.
+   Hand browsing remains available from non-focused cards / the rail itself. */
 function mobileTouchById(list,id){
  for(const t of list||[])if(t.identifier===id)return t;
  return null;
@@ -9792,7 +9830,6 @@ function mobileTouchById(list,id){
 function mobileOwnedTouchReset(){
  const st=creatureDragState;
  if(st?.source)st.source.classList.remove('mobile-touch-owned');
- document.querySelector('#app.duel-viewport')?.classList.remove('mobile-hand-scroll-owned');
 }
 function mobileOwnedTapOpenDetail(st){
  if(!st?.source?.isConnected)return;
@@ -9807,18 +9844,15 @@ document.addEventListener('touchstart',ev=>{
  const eligible=creatureDragEligibleCard(el);
  if(!eligible)return;
 
- /* Critical ownership point: do this before WebKit can promote the sequence to browser/scroll handling. */
  if(ev.cancelable)ev.preventDefault();
 
- const t=ev.touches[0],rect=el.getBoundingClientRect(),rail=el.closest('.hand-scroll');
+ const t=ev.touches[0],rect=el.getBoundingClientRect();
  creatureDragState={
   uid:eligible.uid,source:el,pointerId:'touch',touchId:t.identifier,
   startX:t.clientX,startY:t.clientY,lastX:t.clientX,lastY:t.clientY,
   grabX:t.clientX-rect.left,grabY:t.clientY-rect.top,
   active:false,cancelled:false,hot:false,proxy:null,
-  gestureMode:'undecided',
-  rail,
-  railStartScrollLeft:rail?.scrollLeft||0
+  gestureMode:'undecided'
  };
  el.classList.add('mobile-touch-owned');
 },{passive:false,capture:true});
@@ -9827,49 +9861,32 @@ document.addEventListener('touchmove',ev=>{
  const st=creatureDragState;if(!st||st.pointerId!=='touch'||st.cancelled)return;
  const t=mobileTouchById(ev.touches,st.touchId);if(!t)return;
 
- /* Once this focused card owns the sequence, Safari never gets a later chance to steal it. */
  if(ev.cancelable)ev.preventDefault();
 
  st.lastX=t.clientX;st.lastY=t.clientY;
  const dx=t.clientX-st.startX,dy=t.clientY-st.startY;
- const adx=Math.abs(dx),ady=Math.abs(dy),dist=Math.hypot(dx,dy);
+ const dist=Math.hypot(dx,dy);
 
- if(st.gestureMode==='scroll'){
-  if(st.rail)st.rail.scrollLeft=st.railStartScrollLeft-dx;
-  return;
- }
-
+ /* Focused card has one movement meaning: pick it up.
+    Tiny movement remains a tap so second-tap Detail still works. */
  if(!st.active){
-  if(dist<7)return;
-
-  /* Clear horizontal intent: manual Hand scroll. State stays alive for the whole touch. */
-  if(adx>=10&&adx>ady*1.22){
-   st.gestureMode='scroll';
-   document.querySelector('#app.duel-viewport')?.classList.add('mobile-hand-scroll-owned');
-   if(st.rail)st.rail.scrollLeft=st.railStartScrollLeft-dx;
-   return;
-  }
-
-  /* Upward play intent tolerates natural diagonal finger movement. */
-  if(-dy>=9&&(-dy)>=adx*.42){
-   st.gestureMode='drag';
-   st.active=true;
-   creatureDragCreateProxy(st,t.clientX,t.clientY);
-  }else if(dist>=18&&dy<=-3){
-   st.gestureMode='drag';
-   st.active=true;
-   creatureDragCreateProxy(st,t.clientX,t.clientY);
-  }else{
-   return;
-  }
+  if(dist<6)return;
+  st.gestureMode='drag';
+  st.active=true;
+  creatureDragCreateProxy(st,t.clientX,t.clientY);
  }
 
  creatureDragPositionProxy(t.clientX,t.clientY);
  const r=st.dropRect||creatureDropRect();
- const fingerHot=pointInsideRect(t.clientX,t.clientY,r,16);
+ const upward=st.startY-t.clientY;
+ const fingerHot=upward>=18&&pointInsideRect(t.clientX,t.clientY,r,18);
  const pr=st.proxy?.getBoundingClientRect?.();
- const cardHot=!!pr&&(pointInsideRect(pr.left+pr.width/2,pr.top+pr.height/2,r,8)||rectOverlapRatio(pr,r)>=.16);
- creatureDragSetHot(fingerHot||cardHot);
+ const cardHot=upward>=18&&!!pr&&(
+  pointInsideRect(pr.left+pr.width/2,pr.top+pr.height/2,r,12)||
+  rectOverlapRatio(pr,r)>=.12
+ );
+ const strongUp=upward>=54&&t.clientX>=r.left-20&&t.clientX<=r.right+20&&t.clientY<=r.bottom+28;
+ creatureDragSetHot(fingerHot||cardHot||strongUp);
 },{passive:false,capture:true});
 
 document.addEventListener('touchend',ev=>{
@@ -9881,15 +9898,7 @@ document.addEventListener('touchend',ev=>{
 
  const dx=t.clientX-st.startX,dy=t.clientY-st.startY,dist=Math.hypot(dx,dy);
 
- if(st.gestureMode==='scroll'){
-  dragSuppressClickUntil=Date.now()+500;
-  mobileOwnedTouchReset();
-  creatureDragState=null;
-  return;
- }
-
  if(!st.active){
-  /* Since touchstart suppressed WebKit's synthetic click, perform the focused-card second-tap ourselves. */
   const shouldOpenDetail=dist<=9;
   mobileOwnedTouchReset();
   creatureDragState=null;
@@ -9897,14 +9906,13 @@ document.addEventListener('touchend',ev=>{
   return;
  }
 
- const x=t.clientX,y=t.clientY;
- const valid=creatureDragDropAccepted(st,x,y);
+ const valid=creatureDragDropAccepted(st,t.clientX,t.clientY);
  dragSuppressClickUntil=Date.now()+650;
  mobileOwnedTouchReset();
  if(valid)creatureDragAccept(st);else creatureDragSnapBack(st);
 },{passive:false,capture:true});
 
-document.addEventListener('touchcancel',ev=>{
+document.addEventListener('touchcancel',()=>{
  const st=creatureDragState;if(!st||st.pointerId!=='touch')return;
  mobileOwnedTouchReset();
  if(st.active)creatureDragSnapBack(st);else creatureDragState=null;
