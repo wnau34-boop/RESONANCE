@@ -1,0 +1,30 @@
+{
+  "id": "./",
+  "name": "WONDERBOUND: RESONANCE",
+  "short_name": "RESONANCE",
+  "description": "Fantasy strategic card battle in the world of Caldris.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": [
+    "fullscreen",
+    "standalone"
+  ],
+  "orientation": "landscape",
+  "background_color": "#07191f",
+  "theme_color": "#07191f",
+  "icons": [
+    {
+      "src": "./wonderbound-resonance-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./wonderbound-resonance-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
