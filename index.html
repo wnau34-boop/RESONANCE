@@ -1,3 +1,18 @@
+<!-- M12.11.7A5 — Desktop Mouse Drag Fidelity.
+     Desktop Creature Drag-to-Play now behaves like physically holding a card:
+     pointer capture begins on mouse down, drag arms after a tiny movement threshold,
+     the proxy preserves the exact grab point under the cursor, and proxy X/Y has no easing lag.
+     Mobile 7A4 touch gesture engine remains unchanged.
+     No gameplay, card data, Resonance, targeting, combat, Hand height, Battlefield geometry or P0-P5 changes. -->
+<!-- M12.11.7A4 — Mobile Gesture & Focus Card Hardening.
+     Real-device fix based on iPhone landscape screenshots.
+     Mobile touch now owns vertical Creature drag through touchstart/touchmove/touchend;
+     Pointer Events remain the desktop path. Drop acceptance expands to the full player-side
+     Battlefield region. Focus-card anatomy is rebuilt for readable Name / rule preview / AT-HP,
+     mobile semantic labels are Thai-first, ACTION availability is explicit, bottom safe area is
+     hardened for the Home Indicator, and compact controller / empty-lane copy is cleaned up.
+     No gameplay, card data, Resonance calculation, combat, AI, targeting legality, P0-P5 order,
+     Commit geometry, or desktop Fan behavior changes. -->
 <!-- M12.11.7A3 — Mobile Fullscreen / PWA Experience.
      Adds Web App Manifest metadata, iOS standalone capability, app-mode detection,
      edge-to-edge viewport synchronization, and Fullscreen/PWA fallback guidance.
@@ -6723,6 +6738,249 @@ body.wb-webapp-mode .fullscreen-button{
 }
 </style>
 
+
+<style id="m12-11-7a4-mobile-gesture-focus-hardening">
+/* Remove the old QA badge. The semantic phase chip owns the focused-card status now. */
+@media (orientation:landscape) and (max-width:1180px) and (max-height:700px){
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus[data-card-type="creature"].playable::before{
+    content:none!important;
+    display:none!important;
+  }
+
+  /* Real touch: focused Creature owns vertical drag; horizontal browsing can start from neighboring cards/rail. */
+  #app.mobile-hand-fan-active .hand-scroll.mobile-tactical-fan-hand>.card.mobile-hand-focus[data-card-type="creature"].playable{
+    touch-action:pan-x!important;
+    -webkit-user-select:none!important;
+    user-select:none!important;
+    -webkit-touch-callout:none!important;
+  }
+
+  /* Focus card becomes a compact readable inspector, not a stretched thumbnail. */
+  #app.mobile-hand-fan-active .hand-scroll.mobile-tactical-fan-hand>.card.mobile-hand-focus{
+    flex:0 0 238px!important;
+    width:238px!important;
+    height:84px!important;
+    min-height:84px!important;
+    max-height:84px!important;
+    grid-template-columns:72px minmax(0,1fr)!important;
+    grid-template-rows:84px!important;
+    transform:translateY(0) rotate(0deg)!important;
+    overflow:hidden!important;
+  }
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .card-image{
+    width:72px!important;height:84px!important;min-height:84px!important;max-height:84px!important;
+  }
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .card-body{
+    height:84px!important;min-height:84px!important;max-height:84px!important;
+    padding:4px 7px 4px!important;
+    display:grid!important;
+    grid-template-rows:10px 27px minmax(19px,1fr) 15px!important;
+    gap:1px!important;
+  }
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .card-type{
+    margin:0!important;padding-right:74px!important;
+    font-size:8.5px!important;line-height:10px!important;
+    white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;
+  }
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .card-name{
+    height:27px!important;min-height:27px!important;max-height:27px!important;
+    margin:0!important;
+    font-size:13.2px!important;line-height:13.5px!important;
+    white-space:normal!important;
+    display:-webkit-box!important;-webkit-box-orient:vertical!important;-webkit-line-clamp:2!important;
+    overflow:hidden!important;text-overflow:ellipsis!important;
+  }
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-rule-stack{
+    min-height:19px!important;max-height:25px!important;height:auto!important;
+    margin:0!important;overflow:hidden!important;
+  }
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-core-row:first-child{
+    grid-template-columns:auto minmax(0,1fr)!important;
+    gap:4px!important;
+  }
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-core-tag{
+    font-size:8.4px!important;line-height:1.15!important;white-space:nowrap!important;
+  }
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-core-text,
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-ability-effect{
+    font-size:9.8px!important;line-height:1.18!important;
+    -webkit-line-clamp:2!important;
+  }
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .stats{
+    height:15px!important;min-height:15px!important;max-height:15px!important;
+    margin:0!important;padding:1px 0 0!important;
+    display:flex!important;align-items:end!important;
+  }
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .stats b{font-size:12px!important;line-height:1!important}
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .stats small{font-size:7.5px!important;line-height:1!important}
+
+  .mobile-focus-phase-chip{
+    position:absolute;
+    z-index:7;
+    top:4px;right:5px;
+    max-width:76px;
+    padding:2px 5px;
+    border:1px solid rgba(139,220,225,.45);
+    border-radius:999px;
+    background:rgba(5,27,34,.93);
+    color:#cde8e3;
+    font:800 7.2px/1 'Noto Sans Thai',Tahoma,Arial,sans-serif;
+    letter-spacing:.2px;
+    white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;
+    pointer-events:none;
+  }
+  .mobile-focus-phase-chip[data-state="ready"]{border-color:rgba(232,200,125,.72);color:#f2dc9d}
+  .mobile-focus-phase-chip[data-state="wait"]{border-color:rgba(128,149,153,.52);color:#bdccca}
+  .mobile-focus-phase-chip[data-state="blocked"]{border-color:rgba(189,125,125,.5);color:#ddb9b9}
+
+  /* DETAIL hint belongs over the artwork, not on top of AT/HP. */
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus::after{
+    content:'DETAIL ›'!important;
+    left:4px!important;right:auto!important;bottom:4px!important;
+    padding:2px 4px!important;border-radius:999px!important;
+    background:rgba(4,24,31,.82)!important;
+    font-size:6.7px!important;
+  }
+
+  /* Explicit Home Indicator reserve. env() can be zero in some installed-web-app configurations. */
+  body.wb-webapp-mode.mobile-duel-active #app.mobile-duel-viewport>.game{
+    padding-bottom:max(12px,var(--wb-safe-bottom,0px))!important;
+  }
+
+  /* Controller label cannot clip to READY RESONAI… */
+  #app.mobile-duel-viewport .resonance-ready-summary>span{
+    font-size:0!important;
+  }
+  #app.mobile-duel-viewport .resonance-ready-summary>span::after{
+    content:'READY';
+    font-size:8px!important;
+    letter-spacing:.45px;
+  }
+
+  /* Empty lanes become quiet tactical guidance rather than large tutorial copy. */
+  #app.mobile-duel-viewport .empty-lane{
+    min-height:0!important;
+    border-color:rgba(121,153,152,.25)!important;
+    background:rgba(5,29,38,.20)!important;
+    color:rgba(211,229,224,.72)!important;
+    font-size:9px!important;
+    letter-spacing:.1px!important;
+    text-shadow:none!important;
+  }
+  #app.mobile-duel-viewport .enemy-row .empty-lane{opacity:.58!important}
+  #app.mobile-duel-viewport .player-row .empty-lane{opacity:.82!important}
+}
+
+/* Exact virtual drop region is rendered as a fixed overlay so no Battlefield geometry changes. */
+.creature-drop-surface-cue{
+  position:fixed;
+  z-index:9996;
+  pointer-events:none;
+  display:grid;
+  place-items:center;
+  box-sizing:border-box;
+  border:2px dashed rgba(232,200,125,.52);
+  border-radius:8px;
+  background:rgba(232,200,125,.055);
+  box-shadow:inset 0 0 26px rgba(232,200,125,.055);
+  transition:border-color .1s ease,background .1s ease,box-shadow .1s ease;
+}
+.creature-drop-surface-cue span{
+  padding:5px 9px;
+  border-radius:999px;
+  border:1px solid rgba(232,200,125,.42);
+  background:rgba(5,27,34,.9);
+  color:#e5d29b;
+  font:800 8px/1 'Noto Sans Thai',Tahoma,Arial,sans-serif;
+  letter-spacing:.45px;
+}
+.creature-drop-surface-cue.is-hot{
+  border-color:#f2dda0;
+  background:rgba(232,200,125,.12);
+  box-shadow:inset 0 0 34px rgba(232,200,125,.12),0 0 18px rgba(232,200,125,.12);
+}
+.creature-drop-surface-cue.is-hot span{
+  border-color:#f2dda0;color:#fff0c3;
+}
+@media (prefers-reduced-motion:reduce){
+  .creature-drop-surface-cue{transition:none!important}
+}
+</style>
+
+
+<style id="m12-11-7a5-desktop-mouse-drag-fidelity">
+@media (hover:hover) and (pointer:fine){
+  #app.duel-viewport .hand-scroll>.card[data-card-type="creature"].playable{
+    -webkit-user-drag:none;
+    user-select:none;
+    cursor:grab;
+  }
+  #app.duel-viewport .hand-scroll>.card[data-card-type="creature"].playable *{
+    -webkit-user-drag:none;
+    user-select:none;
+  }
+  #app.duel-viewport .hand-scroll>.card[data-card-type="creature"].playable:active{
+    cursor:grabbing;
+  }
+
+  /* Critical fidelity rule: left/top follow the mouse immediately.
+     Only rotation/scale may ease; X/Y must not lag behind the pointer. */
+  .creature-drag-proxy.desktop-mouse-drag{
+    transform:
+      scale(var(--drag-scale,.94))
+      rotate(-1.2deg)!important;
+    transform-origin:
+      var(--drag-grab-x,50%)
+      var(--drag-grab-y,50%)!important;
+    transition:
+      transform .09s ease,
+      opacity .09s ease,
+      filter .09s ease,
+      box-shadow .09s ease!important;
+    cursor:grabbing!important;
+    will-change:left,top,transform;
+  }
+
+  .creature-drag-proxy.desktop-mouse-drag::after{
+    content:'DROP TO PLAY';
+    position:absolute;
+    left:50%;
+    bottom:-25px;
+    transform:translateX(-50%);
+    padding:5px 9px;
+    border:1px solid rgba(232,200,125,.55);
+    border-radius:999px;
+    background:rgba(5,25,31,.92);
+    color:#f0d99a;
+    font:800 9px/1 'Noto Sans Thai',Tahoma,Arial,sans-serif;
+    letter-spacing:.65px;
+    white-space:nowrap;
+    pointer-events:none;
+    box-shadow:0 6px 16px rgba(0,0,0,.42);
+  }
+
+  #app.duel-viewport.creature-drag-active{
+    cursor:grabbing;
+  }
+  #app.duel-viewport.creature-drag-active *{
+    cursor:grabbing!important;
+  }
+  #app.duel-viewport.creature-drag-active .player-row.creature-drop-zone{
+    outline-width:3px;
+    box-shadow:
+      inset 0 0 42px rgba(232,200,125,.11),
+      0 0 20px rgba(232,200,125,.08);
+  }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .creature-drag-proxy.desktop-mouse-drag{
+    transition:none!important;
+  }
+}
+</style>
+
 </head>
 <style id="m12-11-p5-creature-summon-feedback">
 /* M12.11 P5 — Creature entry feedback. Overlay/filter/clip only; no geometry movement or reflow. */
@@ -8964,6 +9222,41 @@ function mobileTacticalFanActive(){
     This supports real touch devices plus desktop/device-emulation compact landscape QA. */
  return !!app&&started&&landscape&&compact&&(window.innerHeight<=700||touchLike);
 }
+
+function mobileFocusSemanticLabel(raw=''){
+ const text=String(raw||'').trim();
+ const replacements=[
+  [/^ACTIVATE\b/i,'ใช้ความสามารถ'],
+  [/^SUMMON\b/i,'เมื่อลงสนาม'],
+  [/^PLAY\b/i,'ผล'],
+  [/^EQUIP\b/i,'ติดตั้ง'],
+  [/^DEATH\b/i,'เมื่อตาย'],
+  [/^RETURN\b/i,'เมื่อกลับขึ้นมือ'],
+  [/^ALLY DEATH\b/i,'เมื่อฝ่ายเราตาย'],
+  [/^LOW SPIRIT\b/i,'เมื่อ Spirit ต่ำกว่า'],
+  [/^OUTNUMBERED\b/i,'เมื่อ Creature น้อยกว่า']
+ ];
+ for(const [re,to] of replacements)if(re.test(text))return text.replace(re,to);
+ return text;
+}
+function mobileFocusCardDecorate(focus){
+ if(!focus)return;
+ focus.querySelectorAll('.hand-core-tag,.hand-ability-name').forEach(el=>{
+  if(!el.dataset.mobileOriginalLabel)el.dataset.mobileOriginalLabel=el.textContent||'';
+  el.textContent=mobileFocusSemanticLabel(el.dataset.mobileOriginalLabel);
+ });
+ let chip=focus.querySelector('.mobile-focus-phase-chip');
+ if(!chip){chip=document.createElement('span');chip.className='mobile-focus-phase-chip';focus.appendChild(chip)}
+ const uid=Number(focus.dataset.card),x=game.players[0]?.hand?.find(a=>a.uid===uid);
+ const reason=x?game.reason(x):'';
+ const playerTurn=game.active===0;
+ if(!playerTurn){chip.textContent='รอ TURN';chip.dataset.state='wait';}
+ else if(game.phase!=='ACTION'){chip.textContent='รอ ACTION';chip.dataset.state='wait';}
+ else if(reason){chip.textContent='ยังเล่นไม่ได้';chip.dataset.state='blocked';}
+ else if(focus.dataset.cardType==='creature'){chip.textContent='DRAG ↑ เพื่อเล่น';chip.dataset.state='ready';}
+ else{chip.textContent='แตะอีกครั้งเพื่อดู';chip.dataset.state='inspect';}
+}
+
 function setupTacticalFanHand(){
  const app=document.querySelector('#app');
  const rail=app?.querySelector('.hand-scroll');
@@ -8993,10 +9286,10 @@ function setupTacticalFanHand(){
  if(mobile){
   const n=cards.length;
   const focusIndex=cards.findIndex(el=>Number(el.dataset.card)===Number(mobileHandFocusUid));
-  const widths=cards.map((el,i)=>focusIndex===i?210:Math.max(144,Math.min(158,el.getBoundingClientRect().width||148)));
+  const widths=cards.map((el,i)=>focusIndex===i?238:Math.max(144,Math.min(158,el.getBoundingClientRect().width||148)));
   const usable=Math.max(150,rail.clientWidth-8);
   const natural=widths.reduce((a,b)=>a+b,0)+6*Math.max(0,n-1);
-  const overlap=n>1?Math.min(82,Math.max(12,(natural-usable)/(n-1))):0;
+  const overlap=n>1?Math.min(82,Math.max(n<=5?0:8,(natural-usable)/(n-1))):0;
   const center=focusIndex>=0?focusIndex:(n-1)/2;
   const span=Math.max(1,Math.max(center,n-1-center));
 
@@ -9015,6 +9308,7 @@ function setupTacticalFanHand(){
 
   if(focusIndex>=0){
    const focus=cards[focusIndex];
+   mobileFocusCardDecorate(focus);
    requestAnimationFrame(()=>{
     const target=Math.max(0,focus.offsetLeft-(rail.clientWidth-focus.offsetWidth)/2);
     rail.scrollTo({left:target,behavior:'smooth'});
@@ -9079,6 +9373,7 @@ function dragHandoffStage(st){
  const zone=creatureDropZone(),zr=zone?.getBoundingClientRect(),sr=st.source?.getBoundingClientRect();
  const proxy=st.proxy;
  const cx=zr?zr.left+zr.width/2:st.lastX,cy=zr?zr.top+Math.min(zr.height*.58,zr.height-18):st.lastY;
+ proxy.classList.remove('desktop-mouse-drag');
  proxy.classList.remove('creature-drag-snapback','creature-drag-accepted');
  proxy.classList.add('creature-drag-staging');
  proxy.style.left=`${cx}px`;proxy.style.top=`${cy}px`;
@@ -9151,18 +9446,43 @@ function creatureDragEligibleCard(el){
 function creatureDropZone(){
  return document.querySelector('#app.duel-viewport .player-row');
 }
+function creatureDropRect(){
+ const zone=creatureDropZone(),zr=zone?.getBoundingClientRect();
+ if(!mobileTacticalFanActive())return zr||null;
+ const field=document.querySelector('#app.duel-viewport .battlefield');
+ const landmark=field?.querySelector('.landmark-row');
+ const bottom=field?.querySelector('.field-bottom');
+ const fr=field?.getBoundingClientRect(),lr=landmark?.getBoundingClientRect(),br=bottom?.getBoundingClientRect();
+ if(!fr)return zr||null;
+ const top=Math.max(fr.top+fr.height*.46,(lr?.bottom||fr.top+fr.height*.5)-2);
+ const bottomY=Math.min(fr.bottom-4,(br?.top||fr.bottom-4)+2);
+ return {left:fr.left+4,right:fr.right-4,top,bottom:Math.max(top+34,bottomY),width:Math.max(0,fr.width-8),height:Math.max(34,bottomY-top)};
+}
+function creatureDropCueCreate(){
+ document.querySelector('.creature-drop-surface-cue')?.remove();
+ const r=creatureDropRect();if(!r)return null;
+ const cue=document.createElement('div');cue.className='creature-drop-surface-cue';
+ cue.style.left=`${r.left}px`;cue.style.top=`${r.top}px`;cue.style.width=`${r.right-r.left}px`;cue.style.height=`${r.bottom-r.top}px`;
+ cue.innerHTML='<span>PLAYER ARENA · ปล่อย Creature ที่นี่</span>';
+ document.body.appendChild(cue);return cue;
+}
 function pointInsideRect(x,y,r,pad=0){
  return !!r&&x>=r.left-pad&&x<=r.right+pad&&y>=r.top-pad&&y<=r.bottom+pad;
 }
 function creatureDragSetHot(hot){
  const zone=creatureDropZone();
- if(!zone)return;
- zone.classList.toggle('creature-drop-hot',!!hot);
+ zone?.classList.toggle('creature-drop-hot',!!hot);
+ document.querySelector('.creature-drop-surface-cue')?.classList.toggle('is-hot',!!hot);
  if(creatureDragState)creatureDragState.hot=!!hot;
 }
 function creatureDragPositionProxy(x,y){
  const st=creatureDragState;if(!st?.proxy)return;
- st.proxy.style.left=`${x}px`;st.proxy.style.top=`${y}px`;
+ if(st.proxy.classList.contains('desktop-mouse-drag')){
+  st.proxy.style.left=`${x-(st.grabX||0)}px`;
+  st.proxy.style.top=`${y-(st.grabY||0)}px`;
+ }else{
+  st.proxy.style.left=`${x}px`;st.proxy.style.top=`${y}px`;
+ }
 }
 function creatureDragCreateProxy(st,x,y){
  const rect=st.source.getBoundingClientRect(),proxy=st.source.cloneNode(true);
@@ -9175,13 +9495,21 @@ function creatureDragCreateProxy(st,x,y){
  proxy.tabIndex=-1;
  proxy.style.width=`${rect.width}px`;
  proxy.style.height=`${rect.height}px`;
- proxy.style.setProperty('--drag-scale',mobileTacticalFanActive()?'.96':'.82');
+ if(mobileTacticalFanActive()){
+  proxy.style.setProperty('--drag-scale','.96');
+ }else{
+  proxy.classList.add('desktop-mouse-drag');
+  proxy.style.setProperty('--drag-scale','.94');
+  proxy.style.setProperty('--drag-grab-x',`${Math.max(0,Math.min(rect.width,st.grabX||rect.width/2))}px`);
+  proxy.style.setProperty('--drag-grab-y',`${Math.max(0,Math.min(rect.height,st.grabY||rect.height/2))}px`);
+ }
  document.body.appendChild(proxy);
  st.proxy=proxy;
  st.source.classList.add('creature-drag-source');
  st.source.setAttribute('aria-grabbed','true');
  const zone=creatureDropZone();
  if(zone)zone.classList.add('creature-drop-zone');
+ if(mobileTacticalFanActive())creatureDropCueCreate();
  document.querySelector('#app.duel-viewport')?.classList.add('creature-drag-active');
  creatureDragPositionProxy(x,y);
 }
@@ -9195,6 +9523,7 @@ function creatureDragCleanup({keepProxy=false}={}){
  const st=creatureDragState;if(!st)return;
  const zone=creatureDropZone();
  zone?.classList.remove('creature-drop-zone','creature-drop-hot');
+ document.querySelector('.creature-drop-surface-cue')?.remove();
  document.querySelector('#app.duel-viewport')?.classList.remove('creature-drag-active');
  st.source?.classList.remove('creature-drag-source');
  st.source?.removeAttribute('aria-grabbed');
@@ -9204,6 +9533,7 @@ function creatureDragCleanup({keepProxy=false}={}){
 function creatureDragSnapBack(st){
  if(!st?.proxy){creatureDragCleanup();return}
  const r=st.source.getBoundingClientRect();
+ st.proxy.classList.remove('desktop-mouse-drag');
  st.proxy.classList.add('creature-drag-snapback');
  st.proxy.style.left=`${r.left+r.width/2}px`;
  st.proxy.style.top=`${r.top+r.height/2}px`;
@@ -9224,46 +9554,135 @@ function creatureDragAccept(st){
  if(uid!=null)setTimeout(()=>beginHandPlay(uid),90);
 }
 
+document.addEventListener('dragstart',ev=>{
+ if(ev.target.closest?.('#app.duel-viewport .hand-scroll>.card'))ev.preventDefault();
+});
 document.addEventListener('pointerdown',ev=>{
+ if(mobileTacticalFanActive()&&ev.pointerType==='touch')return;
  if(ev.button!==undefined&&ev.button!==0)return;
  const el=ev.target.closest?.('#app.duel-viewport .hand-scroll>.card');
  const eligible=creatureDragEligibleCard(el);
  if(!eligible)return;
+ const rect=el.getBoundingClientRect();
  creatureDragState={
   uid:eligible.uid,source:el,pointerId:ev.pointerId,
   startX:ev.clientX,startY:ev.clientY,lastX:ev.clientX,lastY:ev.clientY,
+  grabX:ev.clientX-rect.left,grabY:ev.clientY-rect.top,
   active:false,cancelled:false,hot:false,proxy:null
  };
+ try{el.setPointerCapture?.(ev.pointerId)}catch{}
 },{passive:true});
 
 document.addEventListener('pointermove',ev=>{
+ if(mobileTacticalFanActive()&&ev.pointerType==='touch')return;
  const st=creatureDragState;if(!st||st.pointerId!==ev.pointerId||st.cancelled)return;
  st.lastX=ev.clientX;st.lastY=ev.clientY;
- const dx=ev.clientX-st.startX,dy=ev.clientY-st.startY,adx=Math.abs(dx);
+ const dx=ev.clientX-st.startX,dy=ev.clientY-st.startY;
  if(!st.active){
-  /* Horizontal intent belongs to Hand scrolling. Upward intent owns Drag-to-Play. */
-  if(adx>18&&adx>Math.abs(dy)*1.18){st.cancelled=true;creatureDragState=null;return}
-  if(-dy>=16&&-dy>adx*.72)creatureDragActivate(ev);
+  /* Desktop mouse: once the cursor has genuinely moved, the card is physically held.
+     No horizontal-cancel rule here; mouse users can move freely and decide where to drop. */
+  if(Math.hypot(dx,dy)>=5)creatureDragActivate(ev);
   else return;
  }
  if(ev.cancelable)ev.preventDefault();
  creatureDragPositionProxy(ev.clientX,ev.clientY);
- const zone=creatureDropZone(),r=zone?.getBoundingClientRect();
+ const r=creatureDropRect();
  creatureDragSetHot(pointInsideRect(ev.clientX,ev.clientY,r,4));
 },{passive:false});
 
 document.addEventListener('pointerup',ev=>{
+ if(mobileTacticalFanActive()&&ev.pointerType==='touch')return;
  const st=creatureDragState;if(!st||st.pointerId!==ev.pointerId)return;
- if(!st.active){creatureDragState=null;return}
+ if(!st.active){try{st.source?.releasePointerCapture?.(st.pointerId)}catch{} creatureDragState=null;return}
  if(ev.cancelable)ev.preventDefault();
- const zone=creatureDropZone(),r=zone?.getBoundingClientRect();
- const valid=pointInsideRect(ev.clientX,ev.clientY,r,4)&&!!creatureDragEligibleCard(st.source);
+ try{st.source?.releasePointerCapture?.(st.pointerId)}catch{}
+ const r=creatureDropRect();
+ const valid=pointInsideRect(ev.clientX,ev.clientY,r,mobileTacticalFanActive()?10:4)&&!!creatureDragEligibleCard(st.source);
  dragSuppressClickUntil=Date.now()+420;
  if(valid)creatureDragAccept(st);else creatureDragSnapBack(st);
 },{passive:false});
 
 document.addEventListener('pointercancel',ev=>{
+ if(mobileTacticalFanActive()&&ev.pointerType==='touch')return;
  const st=creatureDragState;if(!st||st.pointerId!==ev.pointerId)return;
+ try{st.source?.releasePointerCapture?.(st.pointerId)}catch{}
+ if(st.active)creatureDragSnapBack(st);else creatureDragState=null;
+},{passive:true});
+
+
+/* M12.11.7A4 — iOS/mobile touch owns Creature Drag-to-Play.
+   Direction is undecided until intent is clear; diagonal upward movement is accepted.
+   Horizontal browsing remains available until the gesture locks vertical. */
+function mobileTouchById(list,id){
+ for(const t of list||[])if(t.identifier===id)return t;
+ return null;
+}
+document.addEventListener('touchstart',ev=>{
+ if(!mobileTacticalFanActive()||ev.touches.length!==1)return;
+ const el=ev.target.closest?.('#app .hand-scroll>.card.mobile-hand-focus');
+ const eligible=creatureDragEligibleCard(el);
+ if(!eligible)return;
+ const t=ev.touches[0];
+ creatureDragState={
+  uid:eligible.uid,source:el,pointerId:'touch',touchId:t.identifier,
+  startX:t.clientX,startY:t.clientY,lastX:t.clientX,lastY:t.clientY,
+  active:false,cancelled:false,hot:false,proxy:null,gestureMode:'undecided'
+ };
+},{passive:true});
+
+document.addEventListener('touchmove',ev=>{
+ const st=creatureDragState;if(!st||st.pointerId!=='touch'||st.cancelled)return;
+ const t=mobileTouchById(ev.touches,st.touchId);if(!t)return;
+ st.lastX=t.clientX;st.lastY=t.clientY;
+ const dx=t.clientX-st.startX,dy=t.clientY-st.startY,adx=Math.abs(dx),ady=Math.abs(dy),dist=Math.hypot(dx,dy);
+
+ if(!st.active){
+  if(st.gestureMode==='scroll')return;
+  if(dist<9)return;
+
+  /* Do not reject on a small diagonal wobble. Horizontal wins only when clearly dominant. */
+  if(adx>=16&&adx>ady*1.55){
+   st.gestureMode='scroll';
+   creatureDragState=null;
+   return;
+  }
+
+  /* Upward intent can be diagonal; require meaningful upward travel, not a near-perfect angle. */
+  if(-dy>=12&&(-dy)>=adx*.52){
+   st.gestureMode='drag';
+   st.active=true;
+   creatureDragCreateProxy(st,t.clientX,t.clientY);
+  }else if(dist<26){
+   return;
+  }else if(dy<0){
+   st.gestureMode='drag';
+   st.active=true;
+   creatureDragCreateProxy(st,t.clientX,t.clientY);
+  }else{
+   return;
+  }
+ }
+
+ if(!st.active)return;
+ if(ev.cancelable)ev.preventDefault();
+ creatureDragPositionProxy(t.clientX,t.clientY);
+ const r=creatureDropRect();
+ creatureDragSetHot(pointInsideRect(t.clientX,t.clientY,r,10));
+},{passive:false});
+
+document.addEventListener('touchend',ev=>{
+ const st=creatureDragState;if(!st||st.pointerId!=='touch')return;
+ const t=mobileTouchById(ev.changedTouches,st.touchId);
+ if(!st.active){creatureDragState=null;return}
+ if(ev.cancelable)ev.preventDefault();
+ const x=t?.clientX??st.lastX,y=t?.clientY??st.lastY,r=creatureDropRect();
+ const valid=pointInsideRect(x,y,r,10)&&!!creatureDragEligibleCard(st.source);
+ dragSuppressClickUntil=Date.now()+500;
+ if(valid)creatureDragAccept(st);else creatureDragSnapBack(st);
+},{passive:false});
+
+document.addEventListener('touchcancel',ev=>{
+ const st=creatureDragState;if(!st||st.pointerId!=='touch')return;
  if(st.active)creatureDragSnapBack(st);else creatureDragState=null;
 },{passive:true});
 
