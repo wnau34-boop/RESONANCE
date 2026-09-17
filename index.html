@@ -1,3 +1,15 @@
+<!-- M12.11.7A2 — Drag-to-Play Integration Polish.
+     Presentation / interaction follow-up to 7A1. A successful Creature drop now enters a visible staging state,
+     Resonance Commit visually inherits the drop origin, cancel returns the staged card toward Hand, and confirm
+     hands the staged representation into the existing PLAY → SUMMON causal presentation.
+     Right Action guidance becomes contextual during drag. Card Detail remains an Inspect/fallback surface.
+     No gameplay, card data, Resonance validation, target legality, combat, AI, Hand height, Battlefield geometry,
+     Commit geometry, P0-P5 sequencing, or mobile Safe Area ownership changes. -->
+<!-- M12.11.7A1 — Mobile Activation Fix.
+     Fixes an activation gate where Mobile Tactical Fan / Creature Drag-to-Play could silently fall back
+     to the legacy Hand unless the viewport also matched the older mobile-duel <=600px height contract.
+     The Hand interaction now owns a dedicated compact-landscape/touch activation class independent of
+     the full Duel mobile-layout class. Gameplay, card data, Hand height ownership, combat and targeting unchanged. -->
 <!-- M12.11.7A — STEP 7A Creature Drag-to-Play.
      Presentation / input-layer candidate on top of M12.11.6A.
      Playable Creature cards may be dragged upward from Hand and dropped into the Player Arena.
@@ -6250,6 +6262,388 @@
 }
 </style>
 
+
+<style id="m12-11-7a1-mobile-hand-activation-bridge">
+/* Dedicated Hand activation bridge. This deliberately does not restyle the whole Duel. */
+
+/* M12.11.6A — Mobile Tactical Fan Hand.
+   No Duel grid-row / Battlefield / controller / safe-area dimensions are changed. */
+@media (orientation:landscape) and (max-width:1180px) and (max-height:700px){
+  #app.mobile-hand-fan-active .hand-scroll.mobile-tactical-fan-hand{
+    gap:0!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    padding-left:4px!important;
+    padding-right:4px!important;
+    scroll-snap-type:none!important;
+    perspective:850px;
+    isolation:isolate;
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll.mobile-tactical-fan-hand>.card{
+    position:relative!important;
+    z-index:var(--fan-z,1)!important;
+    transform-origin:50% 100%!important;
+    transform:translateY(var(--fan-y,0px)) rotate(var(--fan-rot,0deg))!important;
+    transition:
+      transform .16s cubic-bezier(.2,.75,.25,1),
+      width .16s ease,
+      flex-basis .16s ease,
+      filter .16s ease,
+      border-color .16s ease,
+      box-shadow .16s ease!important;
+    box-shadow:0 4px 11px rgba(0,0,0,.54)!important;
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll.mobile-tactical-fan-hand>.card:not(.mobile-hand-focus){
+    filter:brightness(.94) saturate(.96);
+  }
+
+  /* Focus expands sideways inside the locked Hand row, not upward into the Battlefield. */
+  #app.mobile-hand-fan-active .hand-scroll.mobile-tactical-fan-hand>.card.mobile-hand-focus{
+    flex:0 0 210px!important;
+    width:210px!important;
+    height:96px!important;
+    min-height:96px!important;
+    max-height:96px!important;
+    z-index:90!important;
+    display:grid!important;
+    grid-template-columns:72px minmax(0,1fr)!important;
+    grid-template-rows:96px!important;
+    transform:translateY(-1px) rotate(0deg) scale(1.01)!important;
+    border-color:#e8c87d!important;
+    filter:none!important;
+    box-shadow:
+      0 0 0 1px rgba(232,200,125,.32),
+      0 8px 18px rgba(0,0,0,.66),
+      0 0 15px rgba(139,220,225,.11)!important;
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .card-image{
+    grid-column:1!important;
+    width:72px!important;
+    height:96px!important;
+    min-height:96px!important;
+    border-radius:5px 0 0 5px!important;
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .card-image>.art img{
+    object-position:center 32%!important;
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .cost{
+    width:26px!important;height:26px!important;font-size:15px!important;top:4px!important;left:4px!important
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .requirement{
+    right:3px!important;bottom:4px!important;font-size:11px!important;padding:1px 4px!important
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .card-body{
+    grid-column:2!important;
+    width:100%!important;
+    height:96px!important;
+    min-height:0!important;
+    padding:6px 7px 5px!important;
+    display:flex!important;
+    flex-direction:column!important;
+    overflow:hidden!important;
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .card-type{
+    display:block!important;
+    margin:0 0 1px!important;
+    font-size:9px!important;
+    line-height:10px!important;
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .card-name{
+    display:block!important;
+    height:15px!important;
+    min-height:15px!important;
+    max-height:15px!important;
+    margin:0 0 2px!important;
+    font-size:13.5px!important;
+    line-height:15px!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+  }
+
+  /* Selected-card peek: show only the first compact semantic row; full rules remain in second-tap Detail. */
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-rule-stack{
+    display:block!important;
+    flex:1 1 auto!important;
+    min-height:0!important;
+    max-height:38px!important;
+    margin:1px 0 2px!important;
+    overflow:hidden!important;
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-rule-stack>*{
+    display:none!important;
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-rule-stack>:first-child{
+    display:block!important;
+    padding:0!important;
+    margin:0!important;
+    border:0!important;
+    background:transparent!important;
+    box-shadow:none!important;
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-core-row{
+    display:none!important;
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-core-row:first-child{
+    display:grid!important;
+    grid-template-columns:auto minmax(0,1fr)!important;
+    gap:4px!important;
+    padding:0!important;
+    border:0!important;
+    align-items:start!important;
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-core-tag{
+    display:block!important;
+    margin:1px 0 0!important;
+    font-size:9px!important;
+    line-height:1.2!important;
+    color:#f0d996!important;
+    white-space:nowrap!important;
+  }
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-core-text{
+    display:-webkit-box!important;
+    -webkit-box-orient:vertical!important;
+    -webkit-line-clamp:2!important;
+    overflow:hidden!important;
+    font-size:10.5px!important;
+    line-height:1.22!important;
+    color:#edf3ec!important;
+  }
+
+  /* Ability-only cards still get a useful preview. */
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-rule-stack>:first-child.hand-ability-card{
+    display:block!important;
+  }
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-ability-head{display:none!important}
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-ability-effect{
+    margin:0!important;
+    display:-webkit-box!important;
+    -webkit-box-orient:vertical!important;
+    -webkit-line-clamp:2!important;
+    overflow:hidden!important;
+    font-size:10.5px!important;
+    line-height:1.22!important;
+  }
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-ability-footer{display:none!important}
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .stats{
+    height:14px!important;
+    min-height:14px!important;
+    padding:1px 0 0!important;
+    margin:0!important;
+    font-size:9px!important;
+  }
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .stats b{font-size:11.5px!important}
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .stats small{display:inline!important;font-size:8px!important}
+
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus::after{
+    content:'DETAIL ›';
+    position:absolute;
+    right:5px;
+    bottom:3px;
+    z-index:3;
+    font-size:7.5px;
+    line-height:1;
+    letter-spacing:.55px;
+    color:#e8c87d;
+    opacity:.82;
+    pointer-events:none;
+  }
+}
+
+/* Ultra-short phones retain the same interaction with a slightly narrower focused card. */
+@media (orientation:landscape) and (max-width:760px) and (max-height:390px){
+  #app.mobile-hand-fan-active .hand-scroll.mobile-tactical-fan-hand>.card.mobile-hand-focus{
+    flex-basis:194px!important;
+    width:194px!important;
+    height:90px!important;
+    min-height:90px!important;
+    max-height:90px!important;
+    grid-template-columns:64px minmax(0,1fr)!important;
+    grid-template-rows:90px!important;
+  }
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .card-image{
+    width:64px!important;height:90px!important;min-height:90px!important
+  }
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .card-body{height:90px!important;padding:5px 6px 4px!important}
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-rule-stack{max-height:34px!important}
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-core-text,
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus .hand-ability-effect{font-size:10px!important}
+}
+
+@media (prefers-reduced-motion:reduce){
+  #app.mobile-hand-fan-active .hand-scroll.mobile-tactical-fan-hand>.card{
+    transition:none!important;
+  }
+  #app.mobile-hand-fan-active .hand-scroll.mobile-tactical-fan-hand{
+    scroll-behavior:auto!important;
+  }
+}
+
+
+/* Make activation obvious during QA: a focused playable Creature advertises the upward play gesture. */
+@media (orientation:landscape) and (max-width:1180px) and (max-height:700px){
+  #app.mobile-hand-fan-active .hand-scroll>.card.mobile-hand-focus[data-card-type="creature"].playable::before{
+    content:'DRAG ↑ PLAY';
+    position:absolute;
+    z-index:5;
+    right:5px;
+    top:5px;
+    padding:3px 5px;
+    border:1px solid rgba(232,200,125,.62);
+    border-radius:999px;
+    background:rgba(5,27,34,.9);
+    color:#f0d99a;
+    font:800 7.5px/1 'Noto Sans Thai',Tahoma,Arial,sans-serif;
+    letter-spacing:.45px;
+    pointer-events:none;
+  }
+  #app.mobile-hand-fan-active .hand-scroll.mobile-tactical-fan-hand>.card:not(.mobile-hand-focus){
+    transform:translateY(var(--fan-y,0px)) rotate(calc(var(--fan-rot,0deg) * 1.18))!important;
+  }
+}
+</style>
+
+<style id="m12-11-7a1-mobile-drag-activation-bridge">
+@media (orientation:landscape) and (max-width:1180px) and (max-height:700px){
+  #app.mobile-hand-fan-active .hand-scroll.mobile-tactical-fan-hand>.card.mobile-hand-focus[data-card-type="creature"].playable{
+    touch-action:pan-x;
+  }
+  #app.mobile-hand-fan-active .player-row.creature-drop-zone::before{
+    min-width:102px;
+    padding:5px 8px;
+    font-size:8px;
+    letter-spacing:.7px;
+  }
+  #app.mobile-hand-fan-active.creature-drag-active .hand-scroll>.card{
+    transition:none!important;
+  }
+}
+</style>
+
+
+<style id="m12-11-7a2-drag-integration-polish">
+/* STEP 7A2 — direct-manipulation continuity. No layout rows are added. */
+.creature-drag-proxy.creature-drag-staging{
+  opacity:.9!important;
+  filter:brightness(.92) saturate(.88)!important;
+  box-shadow:
+    0 13px 34px rgba(0,0,0,.72),
+    0 0 0 2px rgba(232,200,125,.58),
+    0 0 30px rgba(232,200,125,.18)!important;
+  transform:translate(-50%,-50%) scale(var(--drag-scale,.62)) rotate(0deg)!important;
+}
+.creature-drag-proxy .drag-staging-tag{
+  position:absolute;
+  left:50%;
+  bottom:-24px;
+  transform:translateX(-50%);
+  padding:5px 9px;
+  border:1px solid rgba(232,200,125,.58);
+  border-radius:999px;
+  background:rgba(5,25,31,.94);
+  color:#f0d99a;
+  font:800 9px/1 'Noto Sans Thai',Tahoma,Arial,sans-serif;
+  letter-spacing:.65px;
+  white-space:nowrap;
+  box-shadow:0 6px 16px rgba(0,0,0,.48);
+}
+.creature-drag-proxy.creature-drag-commit-launch{
+  filter:brightness(1.1) saturate(1.05)!important;
+  box-shadow:
+    0 0 0 2px rgba(139,220,225,.66),
+    0 0 34px rgba(139,220,225,.28),
+    0 14px 34px rgba(0,0,0,.68)!important;
+}
+.creature-drag-proxy.creature-drag-to-summon{
+  opacity:0!important;
+  transform:translate(-50%,-58%) scale(calc(var(--drag-scale,.62) * .78))!important;
+}
+
+/* Commit keeps the same geometry; only its entrance motion references the Arena drop. */
+.commit-detail-modal.drag-commit-enter{
+  animation:wbDragCommitEnter .28s cubic-bezier(.2,.76,.24,1) both!important;
+}
+@keyframes wbDragCommitEnter{
+  0%{
+    opacity:.72;
+    transform:translate(var(--drag-commit-dx,0),var(--drag-commit-dy,0)) scale(.86);
+  }
+  100%{
+    opacity:1;
+    transform:translate(0,0) scale(1);
+  }
+}
+
+/* During a live drag, contextual guidance replaces generic ACTION copy without re-rendering the panel. */
+#app.creature-drag-active .turn-action.action-state{
+  position:relative;
+}
+#app.creature-drag-active .turn-action.action-state::after{
+  content:'PLAY CREATURE  ·  ปล่อยใน Player Arena';
+  position:absolute;
+  z-index:8;
+  inset:2px;
+  display:grid;
+  place-items:center;
+  padding:6px;
+  border:1px solid rgba(232,200,125,.54);
+  border-radius:6px;
+  background:linear-gradient(180deg,rgba(8,34,41,.97),rgba(6,27,34,.97));
+  color:#f1dda2;
+  font:800 10px/1.25 'Noto Sans Thai',Tahoma,Arial,sans-serif;
+  letter-spacing:.6px;
+  text-align:center;
+  pointer-events:none;
+}
+
+/* Detail is now clearly an inspect/fallback surface rather than the only play route. */
+.card-detail-modal .detail-drag-fallback{
+  display:block;
+  margin-top:7px;
+  color:#a9c8c3;
+  font-size:10px;
+  line-height:1.35;
+  text-align:center;
+}
+
+@media (orientation:landscape) and (max-width:1180px) and (max-height:700px){
+  .creature-drag-proxy.creature-drag-staging{--drag-scale:.66}
+  .creature-drag-proxy .drag-staging-tag{
+    bottom:-20px;
+    padding:4px 7px;
+    font-size:7.5px;
+  }
+  #app.mobile-hand-fan-active.creature-drag-active .turn-action.action-state::after{
+    content:'DRAG ↑  ·  ปล่อยในสนาม';
+    padding:4px;
+    font-size:8px;
+  }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .commit-detail-modal.drag-commit-enter{animation:none!important}
+  .creature-drag-proxy.creature-drag-staging,
+  .creature-drag-proxy.creature-drag-commit-launch,
+  .creature-drag-proxy.creature-drag-to-summon{transition:none!important}
+}
+</style>
+
 </head>
 <style id="m12-11-p5-creature-summon-feedback">
 /* M12.11 P5 — Creature entry feedback. Overlay/filter/clip only; no geometry movement or reflow. */
@@ -7864,7 +8258,7 @@ aiStep(){if(this.pendingChoice||this.active!==1||this.winner!==null)return false
 
 
 
-let game=new Game(),chosenDeck=0,started=false,selected=null,pendingPayment=null,mulliganOpen=false,mulliganSelected=new Set(),timer=null,historyOpen=false,resolutionState=null,aiPacingState=null,aiQueueRunning=false,aiQueueGeneration=0,deferResultPresentation=false,causalReadout=null,mobileHandFocusUid=null,creatureDragState=null,dragSuppressClickUntil=0;
+let game=new Game(),chosenDeck=0,started=false,selected=null,pendingPayment=null,mulliganOpen=false,mulliganSelected=new Set(),timer=null,historyOpen=false,resolutionState=null,aiPacingState=null,aiQueueRunning=false,aiQueueGeneration=0,deferResultPresentation=false,causalReadout=null,mobileHandFocusUid=null,creatureDragState=null,dragSuppressClickUntil=0,dragPlayHandoff=null;
 const app=document.querySelector('#app'),detail=document.querySelector('#detail'),rules=document.querySelector('#rules'),graveyard=document.querySelector('#graveyard');
 let graveOwner=0;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -8231,6 +8625,7 @@ function renderPaymentDialog(){
  const paymentState=error?`<p class="commit-status is-error">${esc(error)}</p>`:`<p class="commit-status is-valid">พร้อมยืนยันการจ่าย</p>`;
  detail.innerHTML=`<button class="close" data-pay-cancel="1" aria-label="ยกเลิก">×</button><div class="detail-art">${art(c)}</div><div class="detail-body"><span class="eyebrow">RESONANCE COMMIT</span><h2>${esc(c.name)}</h2><div class="commit-picker"><div class="commit-summary"><span><b>เลือก Resonance</b><small>ปรับจำนวนแต่ละสีให้ครบ Cost</small></span><strong>${total} / ${c.cost}</strong></div><div class="commit-rows">${rows}</div><div class="commit-status-slot">${paymentState}</div><p class="commit-tip"><b>Requirement</b> = จำนวนขั้นต่ำของ Resonance สีนั้นที่ต้องใช้ · <b>AUTO SUGGEST</b> เลือกการจ่ายให้อัตโนมัติ โดยเติม Requirement ให้ครบก่อน</p><div class="commit-actions"><button class="secondary commit-auto" type="button" data-pay-auto="1">AUTO SUGGEST</button><button class="secondary commit-cancel" type="button" data-pay-cancel="1">ยกเลิก</button><button class="primary" type="button" data-pay-confirm="1" ${valid?'':'disabled'}>ยืนยัน COMMIT ${c.cost} →</button></div></div></div>`;
  if(!detail.open)detail.showModal();
+ if(dragPlayHandoff&&Number(dragPlayHandoff.uid)===Number(card.uid))requestAnimationFrame(()=>dragHandoffApplyCommitOrigin(card.uid));
 }
 function startPayment(uid,targetUid=null){
  const p=game.players[0],card=p.hand.find(x=>x.uid===uid);if(!card||game.reason(card))return false;
@@ -8482,19 +8877,25 @@ function enforceHandRuleFit(){
 }
 
 function mobileTacticalFanActive(){
- const app=document.querySelector('#app.duel-viewport');
- return !!app&&app.classList.contains('mobile-duel-viewport')&&window.innerWidth>window.innerHeight&&window.innerWidth<=1180&&window.innerHeight<=600;
+ const app=document.querySelector('#app');
+ const landscape=window.innerWidth>window.innerHeight;
+ const compact=window.innerWidth<=1180;
+ const touchLike=!!(window.matchMedia?.('(pointer:coarse)').matches||navigator.maxTouchPoints>0);
+ /* Hand interaction activation is intentionally broader than the full Duel mobile-layout gate.
+    This supports real touch devices plus desktop/device-emulation compact landscape QA. */
+ return !!app&&started&&landscape&&compact&&(window.innerHeight<=700||touchLike);
 }
 function setupTacticalFanHand(){
- const app=document.querySelector('#app.duel-viewport');
+ const app=document.querySelector('#app');
  const rail=app?.querySelector('.hand-scroll');
- if(!rail)return;
+ if(!rail){app?.classList.remove('mobile-hand-fan-active');return;}
  const cards=[...rail.children].filter(el=>el.classList?.contains('card'));
  const mobile=mobileTacticalFanActive();
- const desktop=window.innerWidth>1000&&!app.classList.contains('mobile-duel-viewport');
+ const desktop=window.innerWidth>1000&&!mobile&&!app.classList.contains('mobile-duel-viewport');
 
  rail.classList.toggle('tactical-fan-hand',desktop&&cards.length>0);
  rail.classList.toggle('mobile-tactical-fan-hand',mobile&&cards.length>0);
+ app.classList.toggle('mobile-hand-fan-active',mobile&&cards.length>0);
 
  const liveUids=new Set(cards.map(el=>Number(el.dataset.card)));
  if(mobileHandFocusUid!==null&&!liveUids.has(Number(mobileHandFocusUid)))mobileHandFocusUid=null;
@@ -8584,6 +8985,82 @@ document.addEventListener('pointerdown',ev=>{
 },{passive:true});
 
 
+
+function dragHandoffProxy(){
+ return dragPlayHandoff?.proxy&&dragPlayHandoff.proxy.isConnected?dragPlayHandoff.proxy:null;
+}
+function dragHandoffClear(remove=true){
+ const proxy=dragHandoffProxy();
+ if(remove)proxy?.remove();
+ dragPlayHandoff=null;
+ detail?.classList?.remove('drag-commit-enter');
+}
+function dragHandoffStage(st){
+ if(!st?.proxy)return null;
+ const zone=creatureDropZone(),zr=zone?.getBoundingClientRect(),sr=st.source?.getBoundingClientRect();
+ const proxy=st.proxy;
+ const cx=zr?zr.left+zr.width/2:st.lastX,cy=zr?zr.top+Math.min(zr.height*.58,zr.height-18):st.lastY;
+ proxy.classList.remove('creature-drag-snapback','creature-drag-accepted');
+ proxy.classList.add('creature-drag-staging');
+ proxy.style.left=`${cx}px`;proxy.style.top=`${cy}px`;
+ proxy.style.setProperty('--drag-scale',mobileTacticalFanActive()?'.72':'.62');
+ dragPlayHandoff={
+  uid:st.uid,
+  proxy,
+  sourceRect:sr?{left:sr.left,top:sr.top,width:sr.width,height:sr.height}:null,
+  stageX:cx,stageY:cy,
+  state:'staging'
+ };
+ const tag=document.createElement('span');
+ tag.className='drag-staging-tag';
+ tag.textContent='READY TO COMMIT';
+ proxy.appendChild(tag);
+ return dragPlayHandoff;
+}
+function dragHandoffApplyCommitOrigin(uid){
+ const h=dragPlayHandoff;if(!h||Number(h.uid)!==Number(uid)||!detail.open)return;
+ const dr=detail.getBoundingClientRect();
+ const dx=h.stageX-(dr.left+dr.width/2),dy=h.stageY-(dr.top+dr.height/2);
+ detail.style.setProperty('--drag-commit-dx',`${Math.max(-dr.width*.38,Math.min(dr.width*.38,dx))}px`);
+ detail.style.setProperty('--drag-commit-dy',`${Math.max(-dr.height*.32,Math.min(dr.height*.32,dy))}px`);
+ detail.classList.remove('drag-commit-enter');void detail.offsetWidth;detail.classList.add('drag-commit-enter');
+ setTimeout(()=>detail.classList.remove('drag-commit-enter'),300);
+}
+function dragHandoffCancel(uid){
+ const h=dragPlayHandoff;if(!h||Number(h.uid)!==Number(uid)){dragHandoffClear();return}
+ const proxy=dragHandoffProxy();
+ const source=document.querySelector(`#app .hand-scroll>.card[data-card="${Number(uid)}"][data-zone="hand"][data-owner="0"]`);
+ const r=source?.getBoundingClientRect()||h.sourceRect;
+ if(proxy&&r){
+  proxy.classList.remove('creature-drag-staging','creature-drag-commit-launch');
+  proxy.classList.add('creature-drag-snapback');
+  proxy.querySelector('.drag-staging-tag')?.remove();
+  proxy.style.left=`${r.left+r.width/2}px`;proxy.style.top=`${r.top+r.height/2}px`;
+  setTimeout(()=>proxy.remove(),220);
+ }else proxy?.remove();
+ dragPlayHandoff=null;
+}
+function dragHandoffCommit(uid){
+ const h=dragPlayHandoff;if(!h||Number(h.uid)!==Number(uid))return;
+ h.state='committed';
+ const proxy=dragHandoffProxy();
+ if(proxy){
+  proxy.classList.remove('creature-drag-staging');
+  proxy.classList.add('creature-drag-commit-launch');
+  const tag=proxy.querySelector('.drag-staging-tag');
+  if(tag)tag.textContent='COMMIT ✓';
+ }
+}
+function dragHandoffMeetSummon(uid){
+ const h=dragPlayHandoff;if(!h||Number(h.uid)!==Number(uid))return;
+ const proxy=dragHandoffProxy();
+ if(proxy){
+  proxy.classList.add('creature-drag-to-summon');
+  setTimeout(()=>proxy.remove(),180);
+ }
+ dragPlayHandoff=null;
+}
+
 function creatureDragEligibleCard(el){
  if(!el||!started||game.active!==0||game.winner!==null||selected||resolutionState||fxLock||aiQueueRunning||aiPacingState||game.pendingChoice)return null;
  if(el.dataset?.zone!=='hand'||Number(el.dataset?.owner)!==0||el.dataset?.cardType!=='creature')return null;
@@ -8659,14 +9136,13 @@ function creatureDragSnapBack(st){
 }
 function creatureDragAccept(st){
  const proxy=st?.proxy;
- if(proxy)proxy.classList.add('creature-drag-accepted');
  st?.source?.classList.remove('creature-drag-source');
  st?.source?.removeAttribute('aria-grabbed');
  const uid=st?.uid;
+ if(proxy)dragHandoffStage(st);
  creatureDragCleanup({keepProxy:!!proxy});
- if(proxy)setTimeout(()=>proxy.remove(),150);
  dragSuppressClickUntil=Date.now()+420;
- if(uid!=null)beginHandPlay(uid);
+ if(uid!=null)setTimeout(()=>beginHandPlay(uid),90);
 }
 
 document.addEventListener('pointerdown',ev=>{
@@ -9083,7 +9559,7 @@ async function presentPlayerPlayP4(events=[],beforeSets=null){
  render();await p4AfterPlayerRender(beforeSets||[new Set(),new Set()]);
  fxLock=false;resolutionState=null;render();
 }
-function showCard(uid,zone,owner){const p=game.players[owner],x=[...p.hand,...p.board,...p.artifacts,...p.grave].find(x=>x.uid===uid);if(!x)return;if(zone==='grave'&&graveyard.open)graveyard.close();const c=C[x.key];if(selected&&zone==='board'){if(selected.kind==='attack'&&owner===1){resolveAttackFx(selected.uid,uid);return;}if(selected.kind==='ability'){const src=game.players[0].board.find(a=>a.uid===selected.uid),sc=src?C[src.key]:null,legalOwner=sc?.activatedTarget==='enemy'?1:0;if(owner===legalOwner){resolveAbilityFx(selected.uid,uid);return;}}if(selected.kind==='play'){const s=game.players[0].hand.find(a=>a.uid===selected.uid);if(s&&owner===(C[s.key].target==='enemy'?1:0)){const playUid=selected.uid;selected=null;render();startPayment(playUid,uid)}return;}}const reason=owner===0&&game.active===0?game.reason(x):'รอ Turn ของคุณ';const effectSections=detailTextSections(c)+detailKeywordSection(c,x)+detailAbilitySection(c);const detailDensity=rulesTextLines(c).length+(c.activated?1:0);const equipNote=zone==='board'&&x.equipment?.length?`<p class="detail-note">Equipment · ${x.equipment.map(a=>esc(C[a.key].name)).join(' · ')}</p>`:'';const artifactNote=zone==='artifact'?`<p class="detail-note">${c.engine==='atlas'?'Lightmark':'Shard'} · ${x.counter} / ${c.engine==='atlas'?3:5}</p>`:'';const abilityBlock=zone==='board'&&owner===0&&c.activated?game.abilityReason(x,p):'';const abilityBlockText=abilityReasonText(abilityBlock);const abilityBlockHint=abilityReasonHint(abilityBlock);const attackBlockReason=zone==='board'&&owner===0?detailAttackBlockReason(x):'';const attackDisabled=!!attackBlockReason;const abilityCostNote=c.activated?detailAbilityCostNotation(c):'';const attackSlot=zone==='board'&&owner===0?`<div class="detail-action-slot attack-slot ${c.activated?'':'solo'}"><button class="primary" data-attack="${uid}" ${attackDisabled?'disabled':''}>โจมตี →</button><small class="detail-action-reason ${attackBlockReason?'':'is-clear'}">${attackBlockReason?esc(attackBlockReason):'พร้อมโจมตีใน ACTION'}</small></div>`:'';const abilitySlot=zone==='board'&&owner===0&&c.activated?`<div class="detail-action-slot ability-slot"><button class="secondary ability-action ${abilityBlock?'blocked':''}" data-activate="${uid}" ${abilityBlock?'disabled':''} title="${esc(abilityBlockText||'ใช้ความสามารถ')}">ใช้ความสามารถ${abilityCostNote?` ${esc(abilityCostNote)}`:''} →</button><small class="detail-action-reason ${abilityBlock?'':'is-clear'}">${abilityBlock?(abilityBlockHint?esc(abilityBlockHint):esc(abilityBlockText)):`${abilityCostNote?`Cost ${esc(abilityCostNote)} · `:''}พร้อมใช้ · 1 ครั้ง/Turn`}</small></div>`:'';const boardActions=zone==='board'&&owner===0?`<div class="detail-actions detail-action-grid">${attackSlot}${abilitySlot}</div>`:'';const handAction=zone==='hand'?`<button class="primary" data-play="${uid}" ${reason?'disabled':''}>${reason||'เล่นการ์ดนี้ →'}</button>`:'';const actionBar=(boardActions||handAction)?`<div class="detail-action-bar">${boardActions||handAction}</div>`:'';detail.style.setProperty('--detail-art',`url("${ASSETS.cards[c.art]}")`);detail.dataset.density=detailDensity>=3?'dense':'normal';detail.className='card-detail-modal';detail.innerHTML=`<button class="close" data-close="detail" aria-label="ปิด">×</button><div class="detail-layout"><div class="detail-art">${art(c)}</div><div class="detail-body"><span class="eyebrow">${c.type} · ${Object.keys(c.req).map(k=>R[k].name).join(' + ')}</span><h2>${esc(c.name)}</h2><div class="detail-cost"><span><small>COST</small><b>${c.cost} Resonance</b></span><span><small>REQUIRES READY</small><b>${req(c)}</b></span>${c.type==='Creature'?`<span><small>STATS</small><b>AT ${x.at??c.at} / HP ${x.hp??c.hp}</b></span>`:''}</div>${detailStatusRow(c,x,zone,owner,p)}<div class="detail-sections">${effectSections}</div>${equipNote}${artifactNote}${actionBar}</div></div>`;detail.showModal();requestAnimationFrame(()=>fitCardDetailViewport())}
+function showCard(uid,zone,owner){const p=game.players[owner],x=[...p.hand,...p.board,...p.artifacts,...p.grave].find(x=>x.uid===uid);if(!x)return;if(zone==='grave'&&graveyard.open)graveyard.close();const c=C[x.key];if(selected&&zone==='board'){if(selected.kind==='attack'&&owner===1){resolveAttackFx(selected.uid,uid);return;}if(selected.kind==='ability'){const src=game.players[0].board.find(a=>a.uid===selected.uid),sc=src?C[src.key]:null,legalOwner=sc?.activatedTarget==='enemy'?1:0;if(owner===legalOwner){resolveAbilityFx(selected.uid,uid);return;}}if(selected.kind==='play'){const s=game.players[0].hand.find(a=>a.uid===selected.uid);if(s&&owner===(C[s.key].target==='enemy'?1:0)){const playUid=selected.uid;selected=null;render();startPayment(playUid,uid)}return;}}const reason=owner===0&&game.active===0?game.reason(x):'รอ Turn ของคุณ';const effectSections=detailTextSections(c)+detailKeywordSection(c,x)+detailAbilitySection(c);const detailDensity=rulesTextLines(c).length+(c.activated?1:0);const equipNote=zone==='board'&&x.equipment?.length?`<p class="detail-note">Equipment · ${x.equipment.map(a=>esc(C[a.key].name)).join(' · ')}</p>`:'';const artifactNote=zone==='artifact'?`<p class="detail-note">${c.engine==='atlas'?'Lightmark':'Shard'} · ${x.counter} / ${c.engine==='atlas'?3:5}</p>`:'';const abilityBlock=zone==='board'&&owner===0&&c.activated?game.abilityReason(x,p):'';const abilityBlockText=abilityReasonText(abilityBlock);const abilityBlockHint=abilityReasonHint(abilityBlock);const attackBlockReason=zone==='board'&&owner===0?detailAttackBlockReason(x):'';const attackDisabled=!!attackBlockReason;const abilityCostNote=c.activated?detailAbilityCostNotation(c):'';const attackSlot=zone==='board'&&owner===0?`<div class="detail-action-slot attack-slot ${c.activated?'':'solo'}"><button class="primary" data-attack="${uid}" ${attackDisabled?'disabled':''}>โจมตี →</button><small class="detail-action-reason ${attackBlockReason?'':'is-clear'}">${attackBlockReason?esc(attackBlockReason):'พร้อมโจมตีใน ACTION'}</small></div>`:'';const abilitySlot=zone==='board'&&owner===0&&c.activated?`<div class="detail-action-slot ability-slot"><button class="secondary ability-action ${abilityBlock?'blocked':''}" data-activate="${uid}" ${abilityBlock?'disabled':''} title="${esc(abilityBlockText||'ใช้ความสามารถ')}">ใช้ความสามารถ${abilityCostNote?` ${esc(abilityCostNote)}`:''} →</button><small class="detail-action-reason ${abilityBlock?'':'is-clear'}">${abilityBlock?(abilityBlockHint?esc(abilityBlockHint):esc(abilityBlockText)):`${abilityCostNote?`Cost ${esc(abilityCostNote)} · `:''}พร้อมใช้ · 1 ครั้ง/Turn`}</small></div>`:'';const boardActions=zone==='board'&&owner===0?`<div class="detail-actions detail-action-grid">${attackSlot}${abilitySlot}</div>`:'';const handDragHint=zone==='hand'&&owner===0&&c.type==='Creature'&&!reason?`<small class="detail-drag-fallback">ทางลัด · ลาก Creature จากมือขึ้น Player Arena เพื่อเล่นได้ทันที</small>`:'';const handAction=zone==='hand'?`<button class="primary" data-play="${uid}" ${reason?'disabled':''}>${reason||'เล่นการ์ดนี้ →'}</button>${handDragHint}`:'';const actionBar=(boardActions||handAction)?`<div class="detail-action-bar">${boardActions||handAction}</div>`:'';detail.style.setProperty('--detail-art',`url("${ASSETS.cards[c.art]}")`);detail.dataset.density=detailDensity>=3?'dense':'normal';detail.className='card-detail-modal';detail.innerHTML=`<button class="close" data-close="detail" aria-label="ปิด">×</button><div class="detail-layout"><div class="detail-art">${art(c)}</div><div class="detail-body"><span class="eyebrow">${c.type} · ${Object.keys(c.req).map(k=>R[k].name).join(' + ')}</span><h2>${esc(c.name)}</h2><div class="detail-cost"><span><small>COST</small><b>${c.cost} Resonance</b></span><span><small>REQUIRES READY</small><b>${req(c)}</b></span>${c.type==='Creature'?`<span><small>STATS</small><b>AT ${x.at??c.at} / HP ${x.hp??c.hp}</b></span>`:''}</div>${detailStatusRow(c,x,zone,owner,p)}<div class="detail-sections">${effectSections}</div>${equipNote}${artifactNote}${actionBar}</div></div>`;detail.showModal();requestAnimationFrame(()=>fitCardDetailViewport())}
 
 function showRules(landmark=false){
   const lm=game.currentLandmark;
@@ -9274,15 +9750,18 @@ async function presentPlayerActionReport(report){
  let presentedSnapshot=report.beforeSnapshot;
  for(let i=0;i<report.beats.length;i++){
   const beat=report.beats[i],nextSnapshot=beat.snapshot||report.finalSnapshot,label=aiCanonicalBeat(beat.label),transition=p4PrepareAITransition(presentedSnapshot,nextSnapshot,label,'death');
-  renderPresentationSnapshot(nextSnapshot);presentCausalBeatFx(beat,report,0,transition,presentedSnapshot,nextSnapshot);presentedSnapshot=nextSnapshot;await aiWait(playerBeatDelay(beat));
+  renderPresentationSnapshot(nextSnapshot);
+  if(label==='SUMMON'&&dragPlayHandoff?.state==='committed')dragHandoffMeetSummon(dragPlayHandoff.uid);
+  presentCausalBeatFx(beat,report,0,transition,presentedSnapshot,nextSnapshot);presentedSnapshot=nextSnapshot;await aiWait(playerBeatDelay(beat));
  }
  renderPresentationSnapshot(report.finalSnapshot);await aiWait(180);deferResultPresentation=false;fxLock=false;resolutionState=null;m12115ClearCausalReadout();render();
+ if(dragPlayHandoff?.state==='committed')dragHandoffClear(true);
 }
 async function resolvePlayerPlayWithFx(uid,targetUid=null,spend=null){
  if(uiInputLocked())return false;const played=game.players[0].hand.find(x=>x.uid===uid);if(!played)return false;
  const beforeSeq=game.eventSeq||0,beforeSnapshot=game.presentationSnapshot();game._presentationCapture=[];deferResultPresentation=true;beginFxLock('play',{sourceUid:uid,targetUid});
  const ok=game.play(uid,targetUid,spend);const captures=game._presentationCapture||[];delete game._presentationCapture;
- if(!ok){deferResultPresentation=false;fxLock=false;resolutionState=null;render();return false}
+ if(!ok){deferResultPresentation=false;fxLock=false;resolutionState=null;render();requestAnimationFrame(()=>dragHandoffCancel(uid));return false}
  const finalSnapshot=game.presentationSnapshot(),report=playerActionReport(beforeSeq,beforeSnapshot,captures,finalSnapshot,'play');detail.close();selected=null;await presentPlayerActionReport(report);return true;
 }
 async function resolveReturnChoiceFx(targetUid=null){
@@ -9412,9 +9891,10 @@ if(uiInputLocked()){ev.preventDefault();return;}
 if(el.dataset.mulliganCard!==undefined){if(!mulliganOpen)return;const uid=Number(el.dataset.mulliganCard);if(mulliganSelected.has(uid))mulliganSelected.delete(uid);else if(mulliganSelected.size<2)mulliganSelected.add(uid);render();return}
 if(el.dataset.payKey!==undefined){const s=paymentStatus();if(!s)return;const k=el.dataset.payKey,delta=Number(el.dataset.payDelta)||0,min=s.c.req[k]||0,current=s.spend[k]||0,next=current+delta;if(next<min||next<0||next>(s.p.readyStones[k]||0))return;const newTotal=s.total+delta;if(newTotal<0||newTotal>s.c.cost)return;pendingPayment.spend[k]=next;renderPaymentDialog();return}
 if(el.dataset.payAuto!==undefined){const s=paymentStatus();if(!s)return;pendingPayment.spend={...game.suggestSpend(s.p,s.c)};renderPaymentDialog();return}
-if(el.dataset.payCancel!==undefined){pendingPayment=null;selected=null;detail.close();render();return}
+if(el.dataset.payCancel!==undefined){const cancelUid=pendingPayment?.uid;pendingPayment=null;selected=null;detail.close();render();if(cancelUid!=null)requestAnimationFrame(()=>dragHandoffCancel(cancelUid));return}
 if(el.dataset.payConfirm!==undefined){
  const ps=paymentStatus();if(!ps||!ps.valid||uiInputLocked())return;const pp={...pendingPayment,spend:{...pendingPayment.spend}};pendingPayment=null;
+ dragHandoffCommit(pp.uid);
  const ok=await resolvePlayerPlayWithFx(pp.uid,pp.targetUid,pp.spend);if(!ok){pendingPayment=pp;renderPaymentDialog()}return
 }
 if(el.dataset.landmarkChoice!==undefined){if(game.resolveLandmarkChoice(Number(el.dataset.landmarkChoice))){render();if(game.active===1)runAI()}return}
@@ -9456,7 +9936,7 @@ if(document.modelContext?.registerTool){
  }});
  window.addEventListener('pagehide',()=>life.abort(),{once:true});
 }
-detail.addEventListener('close',()=>{pendingPayment=null;runAI()});rules.addEventListener('close',()=>runAI());graveyard.addEventListener('close',()=>runAI());
+detail.addEventListener('close',()=>{const cancelledUid=pendingPayment?.uid;pendingPayment=null;if(cancelledUid!=null&&dragPlayHandoff?.state==='staging')requestAnimationFrame(()=>dragHandoffCancel(cancelledUid));runAI()});rules.addEventListener('close',()=>runAI());graveyard.addEventListener('close',()=>runAI());
 </script>
 <script id="phase42s3a2p-adaptive-landmark-artwork-runtime">
 (()=>{
