@@ -1,3 +1,8 @@
+<!-- M12.11.7A6 — Mobile Commit Single-Tap Hardening.
+     iOS/coarse-touch Resonance Commit controls now resolve on a direct touchend path rather than
+     depending only on WebKit's synthesized click. The same centralized payment handler is shared
+     by touch and click, with synthetic-click suppression preventing double execution.
+     Gameplay, Resonance validation/spend, Card Data, Drag, Targeting, Combat and geometry unchanged. -->
 <!-- M12.11.7A5 — Desktop Mouse Drag Fidelity.
      Desktop Creature Drag-to-Play now behaves like physically holding a card:
      pointer capture begins on mouse down, drag arms after a tiny movement threshold,
@@ -6981,6 +6986,25 @@ body.wb-webapp-mode .fullscreen-button{
 }
 </style>
 
+
+<style id="m12-11-7a6-mobile-commit-single-tap">
+@media (hover:none), (pointer:coarse){
+  .commit-detail-modal button{
+    touch-action:manipulation!important;
+    -webkit-tap-highlight-color:transparent!important;
+    -webkit-touch-callout:none!important;
+  }
+  .commit-detail-modal button:active:not(:disabled){
+    filter:brightness(1.12)!important;
+  }
+  /* Keep targets comfortably tappable without changing the locked modal grid. */
+  .commit-detail-modal .commit-stepper button{
+    min-width:30px!important;
+    min-height:30px!important;
+  }
+}
+</style>
+
 </head>
 <style id="m12-11-p5-creature-summon-feedback">
 /* M12.11 P5 — Creature entry feedback. Overlay/filter/clip only; no geometry movement or reflow. */
@@ -8595,7 +8619,7 @@ aiStep(){if(this.pendingChoice||this.active!==1||this.winner!==null)return false
 
 
 
-let game=new Game(),chosenDeck=0,started=false,selected=null,pendingPayment=null,mulliganOpen=false,mulliganSelected=new Set(),timer=null,historyOpen=false,resolutionState=null,aiPacingState=null,aiQueueRunning=false,aiQueueGeneration=0,deferResultPresentation=false,causalReadout=null,mobileHandFocusUid=null,creatureDragState=null,dragSuppressClickUntil=0,dragPlayHandoff=null;
+let game=new Game(),chosenDeck=0,started=false,selected=null,pendingPayment=null,mulliganOpen=false,mulliganSelected=new Set(),timer=null,historyOpen=false,resolutionState=null,aiPacingState=null,aiQueueRunning=false,aiQueueGeneration=0,deferResultPresentation=false,causalReadout=null,mobileHandFocusUid=null,creatureDragState=null,dragSuppressClickUntil=0,dragPlayHandoff=null,commitTouchState=null,commitTouchSuppressUntil=0;
 const app=document.querySelector('#app'),detail=document.querySelector('#detail'),rules=document.querySelector('#rules'),graveyard=document.querySelector('#graveyard');
 let graveOwner=0;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -10444,18 +10468,78 @@ async function requestLandscape(){
   }
 }
 document.getElementById('landscapeButton')?.addEventListener('click',requestLandscape);
+
+async function handleCommitControl(el){
+ if(!el||!el.closest?.('.commit-detail-modal'))return false;
+
+ if(el.dataset.payKey!==undefined){
+  const s=paymentStatus();if(!s)return true;
+  const k=el.dataset.payKey,delta=Number(el.dataset.payDelta)||0,min=s.c.req[k]||0,current=s.spend[k]||0,next=current+delta;
+  if(next<min||next<0||next>(s.p.readyStones[k]||0))return true;
+  const newTotal=s.total+delta;if(newTotal<0||newTotal>s.c.cost)return true;
+  pendingPayment.spend[k]=next;renderPaymentDialog();return true;
+ }
+ if(el.dataset.payAuto!==undefined){
+  const s=paymentStatus();if(!s)return true;
+  pendingPayment.spend={...game.suggestSpend(s.p,s.c)};renderPaymentDialog();return true;
+ }
+ if(el.dataset.payCancel!==undefined){
+  const cancelUid=pendingPayment?.uid;
+  pendingPayment=null;selected=null;detail.close();render();
+  if(cancelUid!=null)requestAnimationFrame(()=>dragHandoffCancel(cancelUid));
+  return true;
+ }
+ if(el.dataset.payConfirm!==undefined){
+  const ps=paymentStatus();
+  if(!ps||!ps.valid||uiInputLocked())return true;
+  const pp={...pendingPayment,spend:{...pendingPayment.spend}};pendingPayment=null;
+  dragHandoffCommit(pp.uid);
+  const ok=await resolvePlayerPlayWithFx(pp.uid,pp.targetUid,pp.spend);
+  if(!ok){pendingPayment=pp;renderPaymentDialog()}
+  return true;
+ }
+ return false;
+}
+
+/* M12.11.7A6 — iOS/coarse touch commits directly on touchend.
+   WebKit no longer needs to synthesize the click before the control responds. */
+document.addEventListener('touchstart',ev=>{
+ const btn=ev.target.closest?.('.commit-detail-modal button');
+ if(!btn||ev.touches.length!==1)return;
+ const t=ev.touches[0];
+ commitTouchState={
+  id:t.identifier,button:btn,startX:t.clientX,startY:t.clientY,
+  lastX:t.clientX,lastY:t.clientY
+ };
+},{passive:true,capture:true});
+
+document.addEventListener('touchmove',ev=>{
+ const st=commitTouchState;if(!st)return;
+ const t=mobileTouchById(ev.touches,st.id);if(!t)return;
+ st.lastX=t.clientX;st.lastY=t.clientY;
+},{passive:true,capture:true});
+
+document.addEventListener('touchend',ev=>{
+ const st=commitTouchState;if(!st)return;
+ const t=mobileTouchById(ev.changedTouches,st.id);
+ commitTouchState=null;
+ if(!t||!st.button.isConnected||st.button.disabled)return;
+ const move=Math.hypot(t.clientX-st.startX,t.clientY-st.startY);
+ if(move>12)return;
+ ev.preventDefault();
+ ev.stopPropagation();
+ commitTouchSuppressUntil=Date.now()+700;
+ void handleCommitControl(st.button);
+},{passive:false,capture:true});
+
+document.addEventListener('touchcancel',()=>{commitTouchState=null},{passive:true,capture:true});
+
 document.addEventListener('click',async ev=>{const el=ev.target.closest('button,a.wordmark');if(!el)return;
 if(Date.now()<dragSuppressClickUntil&&el.closest?.('.hand-scroll>.card')){ev.preventDefault();return;}
+if(Date.now()<commitTouchSuppressUntil&&el.closest?.('.commit-detail-modal')){ev.preventDefault();return;}
+if(await handleCommitControl(el)){ev.preventDefault();return;}
 if(uiInputLocked()){ev.preventDefault();return;}
 if(el.dataset.mulliganCard!==undefined){if(!mulliganOpen)return;const uid=Number(el.dataset.mulliganCard);if(mulliganSelected.has(uid))mulliganSelected.delete(uid);else if(mulliganSelected.size<2)mulliganSelected.add(uid);render();return}
-if(el.dataset.payKey!==undefined){const s=paymentStatus();if(!s)return;const k=el.dataset.payKey,delta=Number(el.dataset.payDelta)||0,min=s.c.req[k]||0,current=s.spend[k]||0,next=current+delta;if(next<min||next<0||next>(s.p.readyStones[k]||0))return;const newTotal=s.total+delta;if(newTotal<0||newTotal>s.c.cost)return;pendingPayment.spend[k]=next;renderPaymentDialog();return}
-if(el.dataset.payAuto!==undefined){const s=paymentStatus();if(!s)return;pendingPayment.spend={...game.suggestSpend(s.p,s.c)};renderPaymentDialog();return}
-if(el.dataset.payCancel!==undefined){const cancelUid=pendingPayment?.uid;pendingPayment=null;selected=null;detail.close();render();if(cancelUid!=null)requestAnimationFrame(()=>dragHandoffCancel(cancelUid));return}
-if(el.dataset.payConfirm!==undefined){
- const ps=paymentStatus();if(!ps||!ps.valid||uiInputLocked())return;const pp={...pendingPayment,spend:{...pendingPayment.spend}};pendingPayment=null;
- dragHandoffCommit(pp.uid);
- const ok=await resolvePlayerPlayWithFx(pp.uid,pp.targetUid,pp.spend);if(!ok){pendingPayment=pp;renderPaymentDialog()}return
-}
 if(el.dataset.landmarkChoice!==undefined){if(game.resolveLandmarkChoice(Number(el.dataset.landmarkChoice))){render();if(game.active===1)runAI()}return}
 if(el.dataset.cartSummon!==undefined){if(game.resolveCartographerSummon(Number(el.dataset.cartSummon))){render();if(game.active===1)runAI()}return}
 if(el.dataset.cartPick!==undefined){if(game.resolveCartographerPick(Number(el.dataset.cartPick))){render();if(game.active===1)runAI()}return}
